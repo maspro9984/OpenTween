@@ -6247,11 +6247,11 @@ namespace OpenTween
                         {
                             if ((keyData & Keys.Control) == Keys.Control && (keyData & Keys.Shift) != Keys.Shift) newLine = true;
 
-                            if ((keyData & Keys.Shift) == Keys.Shift) post = true;
+                            if ((keyData & Keys.Alt) == Keys.Alt) post = true;
                         }
                         else
                         {
-                            if ((keyData & Keys.Shift) == Keys.Shift) post = true;
+                            if ((keyData & Keys.Alt) == Keys.Alt) post = true;
                         }
                     }
                     else // Enter投稿時
