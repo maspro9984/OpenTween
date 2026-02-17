@@ -565,8 +565,9 @@ namespace OpenTween
                 {
                     this.RaiseStatusChanged(this.PostBrowser.StatusText.Replace("&", "&&"));
 
-                    // リンクホバープレビュー開始
-                    if (this.PostBrowser.StatusText.StartsWith("http", StringComparison.Ordinal))
+                    // リンクホバープレビュー開始（サムネイル対応URLを除く）
+                    if (this.PostBrowser.StatusText.StartsWith("http", StringComparison.Ordinal)
+                        && !this.IsThumbnailUrl(this.PostBrowser.StatusText))
                         this.StartLinkHoverTimer(this.PostBrowser.StatusText);
                 }
                 if (MyCommon.IsNullOrEmpty(this.PostBrowser.StatusText))
@@ -632,6 +633,85 @@ namespace OpenTween
                 return;
 
             this.linkPreviewForm?.HidePreview();
+        }
+
+        private bool IsThumbnailUrl(string url)
+        {
+            var post = this.CurrentPost;
+            if (post == null)
+                return false;
+
+            // 展開済みURLを取得
+            // 1. PostClass.ExpandedUrls から取得（通常のURL エンティティ）
+            var expandedUrl = post.GetExpandedUrl(url);
+
+            // 2. ExpandedUrls で展開できない場合、DOM の title 属性から取得（メディアエンティティ等）
+            if (expandedUrl == url)
+            {
+                try
+                {
+                    foreach (var link in this.PostBrowser.Document.Links.Cast<HtmlElement>())
+                    {
+                        if (link.GetAttribute("href") == url)
+                        {
+                            var title = link.GetAttribute("title");
+                            if (!MyCommon.IsNullOrEmpty(title))
+                                expandedUrl = title;
+                            break;
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            return IsThumbnailExpandedUrl(expandedUrl);
+        }
+
+        private static bool IsThumbnailExpandedUrl(string expandedUrl)
+        {
+            // 画像直リンク
+            if (Regex.IsMatch(expandedUrl, @"\.(jpg|jpeg|gif|png|bmp|webp)(\?.*)?$", RegexOptions.IgnoreCase))
+                return true;
+
+            // pic.twitter.com / pbs.twimg.com / pic.x.com
+            if (expandedUrl.Contains("pbs.twimg.com") || expandedUrl.Contains("pic.twitter.com") || expandedUrl.Contains("pic.x.com"))
+                return true;
+
+            // twitter.com/x.com の画像・動画ページ (/photo/, /video/)
+            if (Regex.IsMatch(expandedUrl, @"^https?://(twitter|x)\.com/.+/(photo|video)/", RegexOptions.IgnoreCase))
+                return true;
+
+            // YouTube
+            if (expandedUrl.Contains("youtube.com/watch") || expandedUrl.Contains("youtu.be/"))
+                return true;
+
+            // ニコニコ動画
+            if (expandedUrl.Contains("nicovideo.jp/watch") || expandedUrl.Contains("nico.ms/"))
+                return true;
+
+            // Instagram
+            if (expandedUrl.Contains("instagram.com/") || expandedUrl.Contains("instagr.am/"))
+                return true;
+
+            // Imgur
+            if (Regex.IsMatch(expandedUrl, @"^https?://(?:i\.)?imgur\.com/\w+", RegexOptions.IgnoreCase))
+                return true;
+
+            // pixiv
+            if (expandedUrl.Contains("pixiv.net/"))
+                return true;
+
+            // Gyazo
+            if (expandedUrl.Contains("gyazo.com/"))
+                return true;
+
+            // Vimeo
+            if (expandedUrl.Contains("vimeo.com/"))
+                return true;
+
+            return false;
         }
 
         private void LinkPreviewForm_PreviewHidden(object? sender, EventArgs e)
