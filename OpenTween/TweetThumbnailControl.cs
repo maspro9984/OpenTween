@@ -37,6 +37,9 @@ namespace OpenTween
     public partial class TweetThumbnailControl : UserControl
     {
         private readonly MouseWheelMessageFilter filter = new();
+        private ThumbnailPreviewForm? previewForm;
+        private Timer? hoverTimer;
+        private Timer? hideDelayTimer;
 
         [Browsable(false)]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -49,6 +52,9 @@ namespace OpenTween
 
             this.Model.PropertyChanged +=
                 (s, e) => this.TryInvoke(() => this.Model_PropertyChanged(s, e));
+
+            this.pictureBox.MouseEnter += this.PictureBox_MouseEnter;
+            this.pictureBox.MouseLeave += this.PictureBox_MouseLeave;
         }
 
         protected override void Dispose(bool disposing)
@@ -57,6 +63,9 @@ namespace OpenTween
             {
                 this.components?.Dispose();
                 this.filter.Dispose();
+                this.hoverTimer?.Dispose();
+                this.hideDelayTimer?.Dispose();
+                this.previewForm?.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -113,6 +122,22 @@ namespace OpenTween
             this.pictureBox.AccessibleDescription = thumbnail.TooltipText;
             this.toolTip.SetToolTip(this.pictureBox, thumbnail.TooltipText);
             _ = this.pictureBox.SetImageFromTask(this.Model.LoadSelectedThumbnail);
+
+            // プレビューフォームが表示中なら画像を切り替える
+            this.UpdatePreviewIfVisible();
+        }
+
+        private async void UpdatePreviewIfVisible()
+        {
+            if (this.previewForm == null || !this.previewForm.Visible)
+                return;
+
+            if (!this.Model.ThumbnailAvailable)
+                return;
+
+            var thumbnail = this.Model.CurrentThumbnail;
+            this.previewForm.InvalidateCache();
+            await this.previewForm.ShowPreview(thumbnail, this.previewForm.Location);
         }
 
         public async Task OpenImageInBrowser()
@@ -184,6 +209,74 @@ namespace OpenTween
             {
                 MessageBox.Show(ex.Message);
             }
+        }
+
+        private void PictureBox_MouseEnter(object? sender, EventArgs e)
+        {
+            if (!this.Model.ThumbnailAvailable)
+                return;
+
+            // 非表示遅延タイマーをキャンセル（プレビューから戻ってきた場合）
+            this.hideDelayTimer?.Stop();
+
+            // 既存タイマーを停止してから新しいタイマーを開始
+            this.hoverTimer?.Stop();
+            this.hoverTimer?.Dispose();
+            this.hoverTimer = new Timer { Interval = 300 };
+            this.hoverTimer.Tick += this.HoverTimer_Tick;
+            this.hoverTimer.Start();
+        }
+
+        private void PictureBox_MouseLeave(object? sender, EventArgs e)
+        {
+            this.hoverTimer?.Stop();
+
+            // プレビューフォームへの移動を許可するため、少し遅延してから非表示にする
+            this.hideDelayTimer?.Stop();
+            this.hideDelayTimer?.Dispose();
+            this.hideDelayTimer = new Timer { Interval = 100 };
+            this.hideDelayTimer.Tick += this.HideDelayTimer_Tick;
+            this.hideDelayTimer.Start();
+        }
+
+        private void HideDelayTimer_Tick(object? sender, EventArgs e)
+        {
+            this.hideDelayTimer?.Stop();
+
+            // マウスがプレビューフォーム上にある場合は閉じない
+            if (this.previewForm != null && this.previewForm.IsMouseOver)
+                return;
+
+            // マウスがサムネイル pictureBox 上にある場合も閉じない
+            if (this.pictureBox.ClientRectangle.Contains(this.pictureBox.PointToClient(Cursor.Position)))
+                return;
+
+            this.previewForm?.HidePreview();
+        }
+
+        private void PreviewForm_PreviewHidden(object? sender, EventArgs e)
+        {
+            // プレビューフォームが自身のMouseLeaveで閉じられた場合のコールバック
+            // （特に追加処理は不要だが、将来拡張用に残す）
+        }
+
+        private async void HoverTimer_Tick(object? sender, EventArgs e)
+        {
+            this.hoverTimer?.Stop();
+
+            if (!this.Model.ThumbnailAvailable)
+                return;
+
+            if (this.previewForm == null || this.previewForm.IsDisposed)
+            {
+                this.previewForm = new ThumbnailPreviewForm();
+                this.previewForm.PreviewHidden += this.PreviewForm_PreviewHidden;
+            }
+
+            var thumbnail = this.Model.CurrentThumbnail;
+            var cursorPos = Cursor.Position;
+
+            await this.previewForm.ShowPreview(thumbnail, cursorPos);
         }
     }
 }
