@@ -28,7 +28,7 @@ namespace OpenTween.Controls
         public ContextMenuStrip? TabContextMenuStrip { get; set; }
 
         /// <summary>右クリックされたタブの名前</summary>
-        public string? RightClickedTabName { get; private set; }
+        public string? RightClickedTabName { get; set; }
 
         public int SelectedIndex
         {
@@ -84,6 +84,7 @@ namespace OpenTween.Controls
 
             this.tabbedView.DocumentActivated += this.TabbedView_DocumentActivated;
             this.tabbedView.DocumentDeactivated += this.TabbedView_DocumentDeactivated;
+            this.tabbedView.PopupMenuShowing += this.TabbedView_PopupMenuShowing;
             this.MouseUp += this.Container_MouseUp;
 
             this.documentManager.View = this.tabbedView;
@@ -129,7 +130,11 @@ namespace OpenTween.Controls
             this.suppressEvents = true;
             try
             {
-                this.tabbedView.RemoveDocument(entry.Content);
+                // AllowClose=false のため、一時的に許可してから閉じる
+                if (entry.Document is Document doc)
+                    doc.Properties.AllowClose = DevExpress.Utils.DefaultBoolean.True;
+
+                this.tabbedView.Controller.Close(entry.Document);
                 this.tabMap.Remove(tabName);
                 this.tabOrder.Remove(tabName);
             }
@@ -241,18 +246,21 @@ namespace OpenTween.Controls
             this.TabDeselected?.Invoke(this, new TabDeselectedEventArgs(prevTabName));
         }
 
+        private void TabbedView_PopupMenuShowing(object sender, DevExpress.XtraBars.Docking2010.Views.PopupMenuShowingEventArgs e)
+        {
+            // DevExpress 標準のポップアップメニューを抑制し、独自のコンテキストメニューを表示
+            e.Cancel = true;
+
+            // PopupMenuShowing 発火時点で DevExpress は右クリック対象のドキュメントをアクティブにしている
+            this.RightClickedTabName = this.tabbedView.ActiveDocument?.Caption;
+
+            if (this.TabContextMenuStrip != null)
+                this.TabContextMenuStrip.Show(Cursor.Position);
+        }
+
         private void Container_MouseUp(object? sender, MouseEventArgs e)
         {
-            if (e.Button == MouseButtons.Right)
-            {
-                // 右クリックされたドキュメントのタブ名を保持
-                var activeDoc = this.tabbedView.ActiveDocument;
-                this.RightClickedTabName = activeDoc?.Caption;
-
-                if (this.TabContextMenuStrip != null)
-                    this.TabContextMenuStrip.Show(Cursor.Position);
-            }
-            else if (e.Button == MouseButtons.Middle)
+            if (e.Button == MouseButtons.Middle)
             {
                 this.TabMouseClick?.Invoke(this, e);
             }

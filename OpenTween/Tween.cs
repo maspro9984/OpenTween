@@ -5685,7 +5685,10 @@ namespace OpenTween
         {
             // 右クリックの場合はDocumentManagerTabContainerが設定したタブ名を使用
             if (!MyCommon.IsNullOrEmpty(this.ListTab.RightClickedTabName))
+            {
                 this.rclickTabName = this.ListTab.RightClickedTabName;
+                this.ListTab.RightClickedTabName = null;
+            }
 
             // アプリケーションキーの場合やタブ名が未設定の場合は現在のタブを対象とする
             if (MyCommon.IsNullOrEmpty(this.rclickTabName) || sender != this.ContextMenuTabProperty)
