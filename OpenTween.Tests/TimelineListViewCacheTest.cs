@@ -84,7 +84,7 @@ namespace OpenTween
             Assert.Equal("", item.SubItems[0].Text);
             Assert.Equal("てすと", item.SubItems[1].Text);
             Assert.Equal("foo", item.SubItems[2].Text);
-            Assert.Equal("2022/01/01 0:00:00", item.SubItems[3].Text);
+            Assert.Equal("1/1 0:00", item.SubItems[3].Text);
             Assert.Equal("test", item.SubItems[4].Text);
             Assert.Equal("", item.SubItems[5].Text);
             Assert.Equal("", item.SubItems[6].Text);

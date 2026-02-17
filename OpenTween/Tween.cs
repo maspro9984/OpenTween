@@ -801,10 +801,17 @@ namespace OpenTween
                 if (tabName == currentTabName)
                     continue;
 
-                if (cache.IsListSizeMismatched)
+                if (cache.IsListSizeMismatched || isDelete)
                 {
-                    cache.PurgeCache();
-                    cache.UpdateListSize();
+                    var listView = this.ListTab.GetListView(tabName);
+                    if (listView != null)
+                    {
+                        using (ControlTransaction.Update(listView))
+                        {
+                            cache.PurgeCache();
+                            cache.UpdateListSize();
+                        }
+                    }
                 }
             }
 
