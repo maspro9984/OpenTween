@@ -167,6 +167,7 @@ namespace OpenTween.Controls
             panel.Text = name;
             panel.Name = name;
             panel.Options.ShowCloseButton = false;
+            panel.ControlContainer.ImeMode = System.Windows.Forms.ImeMode.Inherit;
             panel.ControlContainer.Controls.Add(content);
 
             this.detailPanelContents[name] = content;
@@ -420,6 +421,7 @@ namespace OpenTween.Controls
                 return;
 
             content.Dock = DockStyle.Fill;
+            panel.ControlContainer.ImeMode = System.Windows.Forms.ImeMode.Inherit;
             panel.ControlContainer.Controls.Add(content);
         }
 

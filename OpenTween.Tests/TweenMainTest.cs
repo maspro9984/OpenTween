@@ -378,12 +378,11 @@ namespace OpenTween
                 context.Settings.Common.PostCtrlEnter = false;
                 context.Settings.Common.PostShiftEnter = false; // Enter で投稿する設定
                 context.Settings.Local.StatusText = "foo";
-                context.Settings.Local.StatusMultiline = false; // 単一行モード
 
-                // Shift キーが押されている場合はフッターを無効化する
+                // 複数行モードでは Ctrl キーでフッター無効化（Shift では無効化されない）
                 var param = new PostStatusParams(Text: "aaa");
-                var expected = new PostStatusParams(Text: "aaa");
-                Assert.Equal(expected, tweenMain.FormatStatusText(param, modifierKeys: Keys.Shift));
+                var expectedWithFooter = new PostStatusParams(Text: "aaa foo");
+                Assert.Equal(expectedWithFooter, tweenMain.FormatStatusText(param, modifierKeys: Keys.Shift));
             });
         }
 
