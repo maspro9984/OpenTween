@@ -8,6 +8,7 @@
     <OutputPath>bin\$(Configuration)\</OutputPath>
     <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
     <GenerateSatelliteAssembliesForCore>true</GenerateSatelliteAssembliesForCore>
     <DeterministicSourcePaths>true</DeterministicSourcePaths>
     <PathMap>$(MSBuildProjectDirectory)=.</PathMap>
@@ -642,6 +643,7 @@
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="DevExpress.Win.Navigation" Version="24.1.12" />
+    <PackageReference Include="System.Resources.Extensions" Version="8.0.0" />
     <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.19041.2">
       <IncludeAssets>compile; build</IncludeAssets>
     </PackageReference>
@@ -659,7 +661,7 @@
     <InternalsVisibleTo Include="DynamicProxyGenAssembly2" />
   </ItemGroup>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
-  <Target Name="ResXcue" BeforeTargets="Build">
+  <Target Name="ResXcue" BeforeTargets="Build" Condition="'$(MSBuildRuntimeType)' != 'Core'">
     <ResXcueTask Files="@(ResXFiles)" Indent="false" RemoveSchema="true" />
   </Target>
 </Project>
