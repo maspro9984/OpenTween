@@ -436,6 +436,9 @@ namespace OpenTween
 
             this.ListTabSelect(this.statuses.SelectedTabName);
 
+            // 全タブの ListViewCache/Drawer を初期化（フリーレイアウトで複数タブが見える場合に必要）
+            this.InitializeAllTimelineListViews();
+
             // タブの位置を調整する
             this.SetTabAlignment();
 
@@ -778,7 +781,7 @@ namespace OpenTween
 
             if (MyCommon.EndingFlag) return;
 
-            // リストに反映＆選択状態復元
+            // リストに反映＆選択状態復元（現在のタブ）
             if (this.listCache != null && (this.listCache.IsListSizeMismatched || isDelete))
             {
                 using (ControlTransaction.Update(curListView))
@@ -788,6 +791,20 @@ namespace OpenTween
 
                     // 選択位置などを復元
                     currentListViewState.RestoreSelection();
+                }
+            }
+
+            // 非アクティブなタブのリストサイズも更新する（振り分けタブ等）
+            var currentTabName = this.CurrentTabName;
+            foreach (var (tabName, cache) in this.listCaches)
+            {
+                if (tabName == currentTabName)
+                    continue;
+
+                if (cache.IsListSizeMismatched)
+                {
+                    cache.PurgeCache();
+                    cache.UpdateListSize();
                 }
             }
 
@@ -7244,13 +7261,18 @@ namespace OpenTween
         }
 
         private void InitializeTimelineListView()
+            => this.InitializeTimelineListView(this.CurrentTab);
+
+        private void InitializeTimelineListView(TabModel tab)
         {
-            var listView = this.CurrentListView;
-            var tab = this.CurrentTab;
             var tabName = tab.TabName;
 
             // 既にこのタブ用の cache/drawer が存在する場合は再利用
             if (this.listCaches.ContainsKey(tabName))
+                return;
+
+            var listView = this.ListTab.GetListView(tabName);
+            if (listView == null)
                 return;
 
             var newCache = new TimelineListViewCache(listView, tab, this.settings.Common);
@@ -7265,6 +7287,17 @@ namespace OpenTween
 
             newDrawer.IconSize = this.settings.Common.IconSize;
             newDrawer.UpdateItemHeight();
+        }
+
+        /// <summary>
+        /// 全タブの ListViewCache/Drawer を初期化する
+        /// </summary>
+        private void InitializeAllTimelineListViews()
+        {
+            foreach (var tab in this.statuses.Tabs)
+            {
+                this.InitializeTimelineListView(tab);
+            }
         }
 
         private void ListTab_Selecting(object? sender, TabSelectingEventArgs e)
