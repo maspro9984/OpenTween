@@ -90,11 +90,7 @@ namespace OpenTween
         private bool initialLayout = true;
         private bool ignoreConfigSave; // true:起動時処理中
 
-        /// <summary>タブドラッグ中フラグ（DoDragDropを実行するかの判定用）</summary>
-        private bool tabDrag;
-
-        private TabPage? beforeSelectedTab; // タブが削除されたときに前回選択されていたときのタブを選択する為に保持
-        private Point tabMouseDownPoint;
+        private string? beforeSelectedTabName; // タブが削除されたときに前回選択されていたときのタブを選択する為に保持
 
         /// <summary>右クリックしたタブの名前（Tabコントロール機能不足対応）</summary>
         private string? rclickTabName;
@@ -162,17 +158,22 @@ namespace OpenTween
         private readonly List<DateTimeUtc> postTimestamps = new();
         private readonly List<DateTimeUtc> favTimestamps = new();
 
-        // 以下DrawItem関連
-        private readonly StringFormat sfTab = new();
+        // sfTab は DocumentManagerTabContainer に移行済み
 
         //////////////////////////////////////////////////////////////////////////////////////////////////////////
 
         /// <summary>発言保持クラス</summary>
         private readonly TabInformations statuses;
 
-        private TimelineListViewCache? listCache;
-        private TimelineListViewDrawer? listDrawer;
+        private readonly Dictionary<string, TimelineListViewCache> listCaches = new();
+        private readonly Dictionary<string, TimelineListViewDrawer> listDrawers = new();
         private readonly Dictionary<string, TimelineListViewState> listViewState = new();
+
+        private TimelineListViewCache? listCache
+            => this.listCaches.TryGetValue(this.CurrentTabName, out var c) ? c : null;
+
+        private TimelineListViewDrawer? listDrawer
+            => this.listDrawers.TryGetValue(this.CurrentTabName, out var d) ? d : null;
 
         private bool isColumnChanged = false;
 
@@ -227,11 +228,11 @@ namespace OpenTween
         public string CurrentTabName
             => this.statuses.SelectedTabName;
 
-        public TabPage CurrentTabPage
-            => this.ListTab.TabPages[this.statuses.Tabs.IndexOf(this.CurrentTabName)];
+        public TimelineContentPanel CurrentContentPanel
+            => this.ListTab.GetContentPanel(this.CurrentTabName)!;
 
         public DetailsListView CurrentListView
-            => (DetailsListView)this.CurrentTabPage.Tag;
+            => this.ListTab.GetListView(this.CurrentTabName)!;
 
         public PostClass? CurrentPost
             => this.CurrentTab.SelectedPost;
@@ -278,8 +279,7 @@ namespace OpenTween
             this.hookGlobalHotkey.HotkeyPressed += this.HookGlobalHotkey_HotkeyPressed;
             this.gh.NotifyClicked += this.GrowlHelper_Callback;
 
-            // メイリオフォント指定時にタブの最小幅が広くなる問題の対策
-            this.ListTab.HandleCreated += (s, e) => NativeMethods.SetMinTabWidth((TabControl)s, 40);
+            // DevExpress DocumentManager はタブ幅を自動管理するため SetMinTabWidth は不要
 
             this.ImageSelector.Visible = false;
             this.ImageSelector.Enabled = false;
@@ -337,9 +337,7 @@ namespace OpenTween
             this.themeManager = new(this.settings.Local);
             this.tweetDetailsView.Initialize(this, this.iconCache, this.themeManager, this.detailsHtmlBuilder);
 
-            // StringFormatオブジェクトへの事前設定
-            this.sfTab.Alignment = StringAlignment.Center;
-            this.sfTab.LineAlignment = StringAlignment.Center;
+            // sfTab は DocumentManagerTabContainer に移行済み
 
             this.detailsHtmlBuilder.Prepare(this.settings.Common, this.themeManager);
             this.tweetDetailsView.ClearPostBrowser();
@@ -466,16 +464,7 @@ namespace OpenTween
 
             Microsoft.Win32.SystemEvents.TimeChanged += this.SystemEvents_TimeChanged;
 
-            if (this.settings.Common.TabIconDisp)
-            {
-                this.ListTab.DrawMode = TabDrawMode.Normal;
-            }
-            else
-            {
-                this.ListTab.DrawMode = TabDrawMode.OwnerDrawFixed;
-                this.ListTab.DrawItem += this.ListTab_DrawItem;
-                this.ListTab.ImageList = null;
-            }
+            // タブの未読表示は DocumentManagerTabContainer 側で Document.Appearance を使用して実現
 
             if (this.settings.Common.HotkeyEnabled)
             {
@@ -562,7 +551,6 @@ namespace OpenTween
                 this.SearchDialog.Dispose();
                 this.urlDialog.Dispose();
                 this.themeManager.Dispose();
-                this.sfTab.Dispose();
 
                 this.timelineScheduler.Dispose();
                 this.workerCts.Cancel();
@@ -570,6 +558,14 @@ namespace OpenTween
                 this.unsubscribeRateLimitUpdate?.Dispose();
 
                 this.hookGlobalHotkey.Dispose();
+
+                foreach (var cache in this.listCaches.Values)
+                    cache.Dispose();
+                this.listCaches.Clear();
+
+                foreach (var drawer in this.listDrawers.Values)
+                    drawer.Dispose();
+                this.listDrawers.Clear();
             }
 
             // 終了時にRemoveHandlerしておかないとメモリリークする
@@ -729,37 +725,7 @@ namespace OpenTween
             }
         }
 
-        private void ListTab_DrawItem(object sender, DrawItemEventArgs e)
-        {
-            string txt;
-            try
-            {
-                txt = this.statuses.Tabs[e.Index].TabName;
-            }
-            catch (Exception)
-            {
-                return;
-            }
-
-            e.Graphics.FillRectangle(System.Drawing.SystemBrushes.Control, e.Bounds);
-            if (e.State == DrawItemState.Selected)
-            {
-                e.DrawFocusRectangle();
-            }
-            Brush fore;
-            try
-            {
-                if (this.statuses.Tabs[txt].UnreadCount > 0)
-                    fore = Brushes.Red;
-                else
-                    fore = System.Drawing.SystemBrushes.ControlText;
-            }
-            catch (Exception)
-            {
-                fore = System.Drawing.SystemBrushes.ControlText;
-            }
-            e.Graphics.DrawString(txt, e.Font, fore, e.Bounds, this.sfTab);
-        }
+        // ListTab_DrawItem は DocumentManagerTabContainer の SetTabUnreadState に移行済み
 
         private void TimerInterval_Changed(object sender, IntervalChangedEventArgs e)
         {
@@ -843,18 +809,10 @@ namespace OpenTween
 
             if (addCount > 0)
             {
-                if (this.settings.Common.TabIconDisp)
+                foreach (var tab in this.statuses.Tabs)
                 {
-                    foreach (var (tab, index) in this.statuses.Tabs.WithIndex())
-                    {
-                        var tabPage = this.ListTab.TabPages[index];
-                        if (tab.UnreadCount > 0 && tabPage.ImageIndex != 0)
-                            tabPage.ImageIndex = 0; // 未読アイコン
-                    }
-                }
-                else
-                {
-                    this.ListTab.Refresh();
+                    if (tab.UnreadCount > 0)
+                        this.ListTab.SetTabUnreadState(tab.TabName, true);
                 }
             }
 
@@ -2280,18 +2238,11 @@ namespace OpenTween
                     }
                 }
 
-                foreach (var (tab, index) in this.statuses.Tabs.WithIndex())
+                foreach (var tab in this.statuses.Tabs)
                 {
-                    var tabPage = this.ListTab.TabPages[index];
-                    if (this.settings.Common.TabIconDisp && tab.UnreadCount == 0)
-                    {
-                        if (tabPage.ImageIndex == 0)
-                            tabPage.ImageIndex = -1; // タブアイコン
-                    }
+                    if (tab.UnreadCount == 0)
+                        this.ListTab.SetTabUnreadState(tab.TabName, false);
                 }
-
-                if (!this.settings.Common.TabIconDisp)
-                    this.ListTab.Refresh();
             }
         }
 
@@ -2310,19 +2261,11 @@ namespace OpenTween
                     this.listCache?.RefreshStyle(idx);
                 }
             }
-            if (this.settings.Common.TabIconDisp)
+            foreach (var tab in this.statuses.Tabs)
             {
-                foreach (var (tab, index) in this.statuses.Tabs.WithIndex())
-                {
-                    if (tab.UnreadCount == 0)
-                    {
-                        var tabPage = this.ListTab.TabPages[index];
-                        if (tabPage.ImageIndex == 0)
-                            tabPage.ImageIndex = -1; // タブアイコン
-                    }
-                }
+                if (tab.UnreadCount == 0)
+                    this.ListTab.SetTabUnreadState(tab.TabName, false);
             }
-            if (!this.settings.Common.TabIconDisp) this.ListTab.Refresh();
         }
 
         private void UnreadStripMenuItem_Click(object sender, EventArgs e)
@@ -2337,19 +2280,11 @@ namespace OpenTween
                     this.listCache?.RefreshStyle(idx);
                 }
             }
-            if (this.settings.Common.TabIconDisp)
+            foreach (var tab in this.statuses.Tabs)
             {
-                foreach (var (tab, index) in this.statuses.Tabs.WithIndex())
-                {
-                    if (tab.UnreadCount > 0)
-                    {
-                        var tabPage = this.ListTab.TabPages[index];
-                        if (tabPage.ImageIndex == -1)
-                            tabPage.ImageIndex = 0; // タブアイコン
-                    }
-                }
+                if (tab.UnreadCount > 0)
+                    this.ListTab.SetTabUnreadState(tab.TabName, true);
             }
-            if (!this.settings.Common.TabIconDisp) this.ListTab.Refresh();
         }
 
         private async void RefreshStripMenuItem_Click(object sender, EventArgs e)
@@ -2406,20 +2341,12 @@ namespace OpenTween
                     this.accounts.LoadFromSettings(this.settings.Common);
                     this.ImageSelector.Model.InitializeServices(this.CurrentTabAccount);
 
+                    // タブアイコン表示の切り替え (DocumentManagerTabContainer では SetTabUnreadState で管理)
                     try
                     {
-                        if (this.settings.Common.TabIconDisp)
+                        foreach (var tab in this.statuses.Tabs)
                         {
-                            this.ListTab.DrawItem -= this.ListTab_DrawItem;
-                            this.ListTab.DrawMode = TabDrawMode.Normal;
-                            this.ListTab.ImageList = this.TabImage;
-                        }
-                        else
-                        {
-                            this.ListTab.DrawItem -= this.ListTab_DrawItem;
-                            this.ListTab.DrawItem += this.ListTab_DrawItem;
-                            this.ListTab.DrawMode = TabDrawMode.OwnerDrawFixed;
-                            this.ListTab.ImageList = null;
+                            this.ListTab.SetTabUnreadState(tab.TabName, tab.UnreadCount > 0);
                         }
                     }
                     catch (Exception ex)
@@ -2435,12 +2362,9 @@ namespace OpenTween
                         {
                             this.ReadedStripMenuItem.Enabled = false;
                             this.UnreadStripMenuItem.Enabled = false;
-                            if (this.settings.Common.TabIconDisp)
+                            foreach (var tab in this.statuses.Tabs)
                             {
-                                foreach (TabPage myTab in this.ListTab.TabPages)
-                                {
-                                    myTab.ImageIndex = -1;
-                                }
+                                this.ListTab.SetTabUnreadState(tab.TabName, false);
                             }
                         }
                         else
@@ -2473,8 +2397,8 @@ namespace OpenTween
                     var newTheme = new ThemeManager(this.settings.Local);
                     (var oldTheme, this.themeManager) = (this.themeManager, newTheme);
                     this.tweetDetailsView.Theme = this.themeManager;
-                    if (this.listDrawer != null)
-                        this.listDrawer.Theme = this.themeManager;
+                    foreach (var drawer in this.listDrawers.Values)
+                        drawer.Theme = this.themeManager;
                     oldTheme.Dispose();
 
                     try
@@ -2503,16 +2427,9 @@ namespace OpenTween
 
                     try
                     {
-                        if (this.settings.Common.TabIconDisp)
+                        foreach (var tab in this.statuses.Tabs)
                         {
-                            foreach (var (tab, index) in this.statuses.Tabs.WithIndex())
-                            {
-                                var tabPage = this.ListTab.TabPages[index];
-                                if (tab.UnreadCount == 0)
-                                    tabPage.ImageIndex = -1;
-                                else
-                                    tabPage.ImageIndex = 0;
-                            }
+                            this.ListTab.SetTabUnreadState(tab.TabName, tab.UnreadCount > 0);
                         }
                     }
                     catch (Exception ex)
@@ -2526,10 +2443,8 @@ namespace OpenTween
                     {
                         this.ApplyListViewIconSize(this.settings.Common.IconSize);
 
-                        foreach (TabPage tp in this.ListTab.TabPages)
+                        foreach (var lst in this.ListTab.GetAllListViews())
                         {
-                            var lst = (DetailsListView)tp.Tag;
-
                             using (ControlTransaction.Update(lst))
                             {
                                 lst.GridLines = this.settings.Common.ShowGrid;
@@ -2634,25 +2549,26 @@ namespace OpenTween
         /// </summary>
         private void SetTabAlignment()
         {
-            var newAlignment = this.settings.Common.ViewTabBottom ? TabAlignment.Bottom : TabAlignment.Top;
-            if (this.ListTab.Alignment == newAlignment) return;
+            var newLocation = this.settings.Common.ViewTabBottom
+                ? DevExpress.XtraTab.TabHeaderLocation.Bottom
+                : DevExpress.XtraTab.TabHeaderLocation.Top;
 
             // リスト上の選択位置などを退避
             var currentListViewState = this.listViewState[this.CurrentTabName];
             currentListViewState.Save(this.ListLockMenuItem.Checked);
 
-            this.ListTab.Alignment = newAlignment;
+            this.ListTab.SetTabHeaderLocation(newLocation);
 
             currentListViewState.Restore(forceScroll: true);
         }
 
         private void ApplyListViewIconSize(MyCommon.IconSizes iconSz)
         {
-            // アイコンサイズの再設定
-            if (this.listDrawer != null)
+            // アイコンサイズの再設定（全タブに適用）
+            foreach (var drawer in this.listDrawers.Values)
             {
-                this.listDrawer.IconSize = iconSz;
-                this.listDrawer.UpdateItemHeight();
+                drawer.IconSize = iconSz;
+                drawer.UpdateItemHeight();
             }
 
             this.listCache?.PurgeCache();
@@ -2711,7 +2627,7 @@ namespace OpenTween
             // 追加したタブをアクティブに
             this.ListTab.SelectedIndex = this.statuses.Tabs.Count - 1;
             // 検索条件の設定
-            var panel = this.CurrentTabPage.Controls.OfType<PublicSearchHeaderPanel>().First();
+            var panel = (PublicSearchHeaderPanel)this.CurrentContentPanel.HeaderPanel!;
             panel.Query = searchWord;
             this.SaveConfigsTabs();
             // 検索実行
@@ -2770,16 +2686,13 @@ namespace OpenTween
         public bool AddNewTab(TabModel tab, bool startup)
         {
             // 重複チェック
-            if (this.ListTab.TabPages.Cast<TabPage>().Any(x => x.Text == tab.TabName))
+            if (this.ListTab.GetContentPanel(tab.TabName) != null)
                 return false;
 
             // 新規タブ名チェック
             if (tab.TabName == Properties.Resources.AddNewTabText1) return false;
 
-            var tabPage = new TabPage();
             var listCustom = new DetailsListView();
-
-            var cnt = this.statuses.Tabs.Count;
 
             // ToDo:Create and set controls follow tabtypes
 
@@ -2789,10 +2702,7 @@ namespace OpenTween
             using (ControlTransaction.Layout(this.SplitContainer1, false))
             using (ControlTransaction.Layout(this.ListTab, false))
             using (ControlTransaction.Layout(this))
-            using (ControlTransaction.Layout(tabPage, false))
             {
-                tabPage.Controls.Add(listCustom);
-
                 Control? headerPanel = null;
 
                 if (tab is UserTimelineTabModel userTab)
@@ -2836,22 +2746,6 @@ namespace OpenTween
                     headerPanel = panel;
                 }
 
-                if (headerPanel != null)
-                {
-                    tabPage.Controls.Add(headerPanel);
-                }
-
-                tabPage.Tag = listCustom;
-                this.ListTab.Controls.Add(tabPage);
-
-                tabPage.Location = new Point(4, 4);
-                tabPage.Name = "CTab" + cnt;
-                tabPage.Size = new Size(380, 260);
-                tabPage.TabIndex = 2 + cnt;
-                tabPage.Text = tab.TabName;
-                tabPage.UseVisualStyleBackColor = true;
-                tabPage.AccessibleRole = AccessibleRole.PageTab;
-
                 listCustom.AccessibleName = Properties.Resources.AddNewTab_ListView_AccessibleName;
                 listCustom.TabIndex = 1;
                 listCustom.AllowColumnReorder = true;
@@ -2886,6 +2780,9 @@ namespace OpenTween
                 listCustom.ColumnReordered += this.MyList_ColumnReordered;
                 listCustom.ColumnWidthChanged += this.MyList_ColumnWidthChanged;
                 listCustom.HScrolled += this.MyList_HScrolled;
+
+                var contentPanel = new TimelineContentPanel(listCustom, headerPanel, tab.TabName);
+                this.ListTab.AddTab(tab.TabName, contentPanel);
             }
 
             var state = new TimelineListViewState(listCustom, tab);
@@ -2919,47 +2816,66 @@ namespace OpenTween
             if (tabIndex == -1)
                 return false;
 
-            var tabPage = this.ListTab.TabPages[tabIndex];
+            var contentPanel = this.ListTab.GetContentPanel(tabName);
+            if (contentPanel == null)
+                return false;
 
             this.SetListProperty();   // 他のタブに列幅等を反映
 
             this.listViewState.Remove(tabName);
 
+            if (this.listCaches.TryGetValue(tabName, out var removedCache))
+            {
+                removedCache.Dispose();
+                this.listCaches.Remove(tabName);
+            }
+
+            if (this.listDrawers.TryGetValue(tabName, out var removedDrawer))
+            {
+                removedDrawer.Dispose();
+                this.listDrawers.Remove(tabName);
+            }
+
             // オブジェクトインスタンスの削除
-            var listCustom = (DetailsListView)tabPage.Tag;
-            tabPage.Tag = null;
+            var listCustom = contentPanel.ListView;
 
             using (ControlTransaction.Layout(this.SplitContainer1.Panel1, false))
             using (ControlTransaction.Layout(this.SplitContainer1.Panel2, false))
             using (ControlTransaction.Layout(this.SplitContainer1, false))
             using (ControlTransaction.Layout(this.ListTab, false))
             using (ControlTransaction.Layout(this))
-            using (ControlTransaction.Layout(tabPage, false))
             {
                 if (this.CurrentTabName == tabName)
                 {
-                    this.ListTab.SelectTab((this.beforeSelectedTab != null && this.ListTab.TabPages.Contains(this.beforeSelectedTab)) ? this.beforeSelectedTab : this.ListTab.TabPages[0]);
-                    this.beforeSelectedTab = null;
+                    // 前回選択タブが存在すればそちらを選択、なければ先頭タブを選択
+                    if (this.beforeSelectedTabName != null && this.ListTab.GetContentPanel(this.beforeSelectedTabName) != null)
+                        this.ListTab.SelectedIndex = this.statuses.Tabs.IndexOf(this.beforeSelectedTabName);
+                    else
+                        this.ListTab.SelectTab(0);
+
+                    this.beforeSelectedTabName = null;
                 }
-                this.ListTab.Controls.Remove(tabPage);
+
+                this.ListTab.RemoveTab(tabName);
 
                 // 後付けのコントロールを破棄
                 if (tabInfo.TabType == MyCommon.TabUsageType.UserTimeline ||
                     tabInfo.TabType == MyCommon.TabUsageType.Lists ||
                     tabInfo is HomeSpecifiedAccountTabModel)
                 {
-                    using var panel = tabPage.Controls.OfType<GeneralTimelineHeaderPanel>().First();
-                    tabPage.Controls.Remove(panel);
+                    var panel = contentPanel.HeaderPanel as GeneralTimelineHeaderPanel;
+                    panel?.Dispose();
                 }
                 else if (tabInfo.TabType == MyCommon.TabUsageType.PublicSearch)
                 {
-                    using var panel = tabPage.Controls.OfType<PublicSearchHeaderPanel>().First();
-                    panel.EscKeyDown -= this.PublicSearchTabPanel_EscKeyDown;
-                    panel.Search -= this.PublicSearchTabPanel_Search;
-                    tabPage.Controls.Remove(panel);
+                    var panel = contentPanel.HeaderPanel as PublicSearchHeaderPanel;
+                    if (panel != null)
+                    {
+                        panel.EscKeyDown -= this.PublicSearchTabPanel_EscKeyDown;
+                        panel.Search -= this.PublicSearchTabPanel_Search;
+                        panel.Dispose();
+                    }
                 }
-
-                tabPage.Controls.Remove(listCustom);
 
                 listCustom.SelectedIndexChanged -= this.MyList_SelectedIndexChanged;
                 listCustom.MouseDoubleClick -= this.MyList_MouseDoubleClick;
@@ -2989,66 +2905,28 @@ namespace OpenTween
                 this.listCache?.PurgeCache();
             }
 
-            tabPage.Dispose();
+            contentPanel.Dispose();
             listCustom.Dispose();
             this.statuses.RemoveTab(tabName);
 
             return true;
         }
 
-        private void ListTab_Deselected(object sender, TabControlEventArgs e)
+        private void ListTab_Deselected(object? sender, TabDeselectedEventArgs e)
         {
             this.listCache?.PurgeCache();
-            this.beforeSelectedTab = e.TabPage;
+            this.beforeSelectedTabName = e.PreviousTabName;
         }
 
-        private void ListTab_MouseMove(object sender, MouseEventArgs e)
-        {
-            // タブのD&D
-
-            if (!this.settings.Common.TabMouseLock && e.Button == MouseButtons.Left && this.tabDrag)
-            {
-                var tn = "";
-                var dragEnableRectangle = new Rectangle(this.tabMouseDownPoint.X - (SystemInformation.DragSize.Width / 2), this.tabMouseDownPoint.Y - (SystemInformation.DragSize.Height / 2), SystemInformation.DragSize.Width, SystemInformation.DragSize.Height);
-                if (!dragEnableRectangle.Contains(e.Location))
-                {
-                    // タブが多段の場合にはMouseDownの前の段階で選択されたタブの段が変わっているので、このタイミングでカーソルの位置からタブを判定出来ない。
-                    tn = this.CurrentTabName;
-                }
-
-                if (MyCommon.IsNullOrEmpty(tn)) return;
-
-                var tabIndex = this.statuses.Tabs.IndexOf(tn);
-                if (tabIndex != -1)
-                {
-                    var tabPage = this.ListTab.TabPages[tabIndex];
-                    this.ListTab.DoDragDrop(tabPage, DragDropEffects.All);
-                }
-            }
-            else
-            {
-                this.tabDrag = false;
-            }
-
-            var cpos = new Point(e.X, e.Y);
-            foreach (var (tab, index) in this.statuses.Tabs.WithIndex())
-            {
-                var rect = this.ListTab.GetTabRect(index);
-                if (rect.Contains(cpos))
-                {
-                    this.rclickTabName = tab.TabName;
-                    break;
-                }
-            }
-        }
+        // ListTab_MouseMove は DevExpress の組み込みドラッグ&ドロップにより不要
 
         private void ListTab_SelectedIndexChanged(object sender, EventArgs e)
         {
             this.SetMainWindowTitle();
             this.SetStatusLabelUrl();
             this.SetApiStatusLabel(this.CurrentTabAccount.AccountState.RateLimits);
-            if (this.ListTab.Focused || ((Control)this.CurrentTabPage.Tag).Focused)
-                this.Tag = this.ListTab.Tag;
+            if (this.ListTab.Focused || this.CurrentListView.Focused)
+                this.Tag = this.CurrentListView;
             this.TabMenuControl(this.CurrentTabName);
             this.PushSelectPostChain();
             this.DispSelectedPost();
@@ -3075,19 +2953,15 @@ namespace OpenTween
             }
 
             // 列幅、列並びを他のタブに設定
-            foreach (TabPage tb in this.ListTab.TabPages)
+            foreach (var lst in this.ListTab.GetAllListViews())
             {
-                if (tb.Text == this.CurrentTabName)
+                if (lst == currentListView)
                     continue;
 
-                if (tb.Tag != null && tb.Controls.Count > 0)
+                for (var i = 0; i < lst.Columns.Count; i++)
                 {
-                    var lst = (DetailsListView)tb.Tag;
-                    for (var i = 0; i < lst.Columns.Count; i++)
-                    {
-                        lst.Columns[dispOrder[i]].DisplayIndex = i;
-                        lst.Columns[i].Width = currentListView.Columns[i].Width;
-                    }
+                    lst.Columns[dispOrder[i]].DisplayIndex = i;
+                    lst.Columns[i].Width = currentListView.Columns[i].Width;
                 }
             }
 
@@ -3389,21 +3263,10 @@ namespace OpenTween
                     this.listCache?.UpdateListSize();
                 }
 
-                foreach (var (tab, index) in this.statuses.Tabs.WithIndex())
+                foreach (var tab in this.statuses.Tabs)
                 {
-                    var tabPage = this.ListTab.TabPages[index];
-
-                    if (this.settings.Common.TabIconDisp)
-                    {
-                        if (tab.UnreadCount > 0)
-                            tabPage.ImageIndex = 0;
-                        else
-                            tabPage.ImageIndex = -1;
-                    }
+                    this.ListTab.SetTabUnreadState(tab.TabName, tab.UnreadCount > 0);
                 }
-
-                if (!this.settings.Common.TabIconDisp)
-                    this.ListTab.Refresh();
 
                 this.SetMainWindowTitle();
                 this.SetStatusLabelUrl();
@@ -3422,10 +3285,7 @@ namespace OpenTween
 
             ScaleChildControl(this.TabImage, factor);
 
-            var tabpages = this.ListTab.TabPages.Cast<TabPage>();
-            var listviews = tabpages.Select(x => x.Tag).Cast<ListView>();
-
-            foreach (var listview in listviews)
+            foreach (var listview in this.ListTab.GetAllListViews())
             {
                 ScaleChildControl(listview, factor);
             }
@@ -3686,7 +3546,6 @@ namespace OpenTween
             {
                 // 全部調べたが未読見つからず→先頭タブの最新発言へ
                 this.ListTab.SelectedIndex = 0;
-                var tabPage = this.ListTab.TabPages[0];
                 var tab = this.statuses.Tabs[0];
 
                 if (tab.AllCount == 0)
@@ -3697,12 +3556,12 @@ namespace OpenTween
                 else
                     foundIndex = 0;
 
-                lst = (DetailsListView)tabPage.Tag;
+                lst = this.ListTab.GetListView(tab.TabName)!;
             }
             else
             {
                 var foundTabIndex = this.statuses.Tabs.IndexOf(foundTab);
-                lst = (DetailsListView)this.ListTab.TabPages[foundTabIndex].Tag;
+                lst = this.ListTab.GetListView(foundTab.TabName)!;
             }
 
             this.SelectListItem(lst, foundIndex);
@@ -3868,21 +3727,10 @@ namespace OpenTween
             if (!this.StatusLabelUrl.Text.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                 this.SetStatusLabelUrl();
 
-            if (this.settings.Common.TabIconDisp)
+            foreach (var tab in this.statuses.Tabs)
             {
-                foreach (var (tab, index) in this.statuses.Tabs.WithIndex())
-                {
-                    if (tab.UnreadCount == 0)
-                    {
-                        var tabPage = this.ListTab.TabPages[index];
-                        if (tabPage.ImageIndex == 0)
-                            tabPage.ImageIndex = -1;
-                    }
-                }
-            }
-            else
-            {
-                this.ListTab.Refresh();
+                if (tab.UnreadCount == 0)
+                    this.ListTab.SetTabUnreadState(tab.TabName, false);
             }
 
             this.DispSelectedPost();
@@ -3965,8 +3813,8 @@ namespace OpenTween
             var tab = this.CurrentTab;
             if (tab.TabType == MyCommon.TabUsageType.PublicSearch)
             {
-                var panel = this.CurrentTabPage.Controls.OfType<PublicSearchHeaderPanel>().First();
-                if (panel.ContainsFocus)
+                var panel = this.CurrentContentPanel.HeaderPanel as PublicSearchHeaderPanel;
+                if (panel != null && panel.ContainsFocus)
                     return;
             }
 
@@ -4403,7 +4251,7 @@ namespace OpenTween
                     .OnlyWhen(() => this.CurrentTab.TabType == MyCommon.TabUsageType.PublicSearch)
                     .Do(() =>
                     {
-                        var panel = this.CurrentTabPage.Controls.OfType<PublicSearchHeaderPanel>().First();
+                        var panel = (PublicSearchHeaderPanel)this.CurrentContentPanel.HeaderPanel!;
                         panel.FocusToQuery();
                     }),
 
@@ -5101,8 +4949,7 @@ namespace OpenTween
             inReplyToIndex = inReplyPost.Index;
 
             var tabIndex = this.statuses.Tabs.IndexOf(inReplyToTabName);
-            var tabPage = this.ListTab.TabPages[tabIndex];
-            var listView = (DetailsListView)tabPage.Tag;
+            var listView = this.ListTab.GetListView(inReplyToTabName)!;
 
             if (this.CurrentTabName != inReplyToTabName)
             {
@@ -5274,8 +5121,7 @@ namespace OpenTween
                 }
 
                 var tabIndex = this.statuses.Tabs.IndexOf(foundTab);
-                var tabPage = this.ListTab.TabPages[tabIndex];
-                var lst = (DetailsListView)tabPage.Tag;
+                var lst = this.ListTab.GetListView(foundTab.TabName)!;
                 this.ListTab.SelectedIndex = tabIndex;
 
                 if (idx > -1)
@@ -5377,7 +5223,7 @@ namespace OpenTween
         private void StatusText_Leave(object sender, EventArgs e)
         {
             // フォーカスがメニューに遷移しないならばフォーカスはタブに移ることを期待
-            if (this.ListTab.SelectedTab != null && this.MenuStrip1.Tag == null) this.Tag = this.ListTab.SelectedTab.Tag;
+            if (this.ListTab.TabCount > 0 && this.MenuStrip1.Tag == null) this.Tag = this.CurrentListView;
             this.StatusText.BackColor = Color.FromKnownColor(KnownColor.Window);
         }
 
@@ -5645,12 +5491,8 @@ namespace OpenTween
                     return false;
                 }
 
-                var tabIndex = this.statuses.Tabs.IndexOf(origTabName);
-                var tabPage = this.ListTab.TabPages[tabIndex];
-
                 // タブ名を変更
-                if (tabPage != null)
-                    tabPage.Text = newTabName;
+                this.ListTab.RenameTab(origTabName, newTabName);
 
                 this.statuses.RenameTab(origTabName, newTabName);
 
@@ -5669,91 +5511,7 @@ namespace OpenTween
             }
         }
 
-        private void ListTab_MouseClick(object sender, MouseEventArgs e)
-        {
-            if (e.Button == MouseButtons.Middle)
-            {
-                foreach (var (tab, index) in this.statuses.Tabs.WithIndex())
-                {
-                    if (this.ListTab.GetTabRect(index).Contains(e.Location))
-                    {
-                        this.RemoveSpecifiedTab(tab.TabName, true);
-                        this.SaveConfigsTabs();
-                        break;
-                    }
-                }
-            }
-        }
-
-        private void ListTab_DoubleClick(object sender, MouseEventArgs e)
-            => this.TabRename(this.CurrentTabName, out _);
-
-        private void ListTab_MouseDown(object sender, MouseEventArgs e)
-        {
-            if (this.settings.Common.TabMouseLock) return;
-            if (e.Button == MouseButtons.Left)
-            {
-                foreach (var i in Enumerable.Range(0, this.statuses.Tabs.Count))
-                {
-                    if (this.ListTab.GetTabRect(i).Contains(e.Location))
-                    {
-                        this.tabDrag = true;
-                        this.tabMouseDownPoint = e.Location;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                this.tabDrag = false;
-            }
-        }
-
-        private void ListTab_DragEnter(object sender, DragEventArgs e)
-        {
-            if (e.Data.GetDataPresent(typeof(TabPage)))
-                e.Effect = DragDropEffects.Move;
-            else
-                e.Effect = DragDropEffects.None;
-        }
-
-        private void ListTab_DragDrop(object sender, DragEventArgs e)
-        {
-            if (!e.Data.GetDataPresent(typeof(TabPage))) return;
-
-            this.tabDrag = false;
-            var tn = "";
-            var bef = false;
-            var cpos = new Point(e.X, e.Y);
-            var spos = this.ListTab.PointToClient(cpos);
-            foreach (var (tab, index) in this.statuses.Tabs.WithIndex())
-            {
-                var rect = this.ListTab.GetTabRect(index);
-                if (rect.Contains(spos))
-                {
-                    tn = tab.TabName;
-                    if (spos.X <= (rect.Left + rect.Right) / 2)
-                        bef = true;
-                    else
-                        bef = false;
-
-                    break;
-                }
-            }
-
-            // タブのないところにドロップ->最後尾へ移動
-            if (MyCommon.IsNullOrEmpty(tn))
-            {
-                var lastTab = this.statuses.Tabs.Last();
-                tn = lastTab.TabName;
-                bef = false;
-            }
-
-            var tp = (TabPage)e.Data.GetData(typeof(TabPage));
-            if (tp.Text == tn) return;
-
-            this.ReOrderTab(tp.Text, tn, bef);
-        }
+        // ListTab_MouseClick/DoubleClick/MouseDown/DragEnter/DragDrop は DevExpress の組み込み機能で代替
 
         public void ReOrderTab(string targetTabText, string baseTabText, bool isBeforeBaseTab)
         {
@@ -5765,28 +5523,16 @@ namespace OpenTween
             if (targetIndex == -1)
                 return;
 
-            using (ControlTransaction.Layout(this.ListTab))
-            {
-                // 選択中のタブを Remove メソッドで取り外すと選択状態が変化して Selecting イベントが発生するが、
-                // この時 TabInformations と TabControl の並び順が不一致なままで ListTabSelect メソッドが呼ばれてしまう。
-                // これを防ぐために、Remove メソッドを呼ぶ前に選択中のタブを切り替えておく必要がある
-                this.ListTab.SelectedIndex = targetIndex == 0 ? 1 : 0;
+            var tab = this.statuses.Tabs[targetIndex];
 
-                var tab = this.statuses.Tabs[targetIndex];
-                var tabPage = this.ListTab.TabPages[targetIndex];
+            if (targetIndex < baseIndex)
+                baseIndex--;
 
-                this.ListTab.TabPages.Remove(tabPage);
+            if (!isBeforeBaseTab)
+                baseIndex++;
 
-                if (targetIndex < baseIndex)
-                    baseIndex--;
-
-                if (!isBeforeBaseTab)
-                    baseIndex++;
-
-                this.statuses.MoveTab(baseIndex, tab);
-
-                this.ListTab.TabPages.Insert(baseIndex, tabPage);
-            }
+            this.statuses.MoveTab(baseIndex, tab);
+            this.ListTab.MoveTab(targetTabText, baseIndex);
 
             this.SaveConfigsTabs();
         }
@@ -5864,8 +5610,7 @@ namespace OpenTween
             this.StatusText.Focus();
         }
 
-        private void ListTab_MouseUp(object sender, MouseEventArgs e)
-            => this.tabDrag = false;
+        // ListTab_MouseUp は DevExpress の組み込みドラッグ&ドロップにより不要
 
         private int iconCnt = 0;
         private int blinkCnt = 0;
@@ -5938,7 +5683,11 @@ namespace OpenTween
 
         private void ContextMenuTabProperty_Opening(object sender, CancelEventArgs e)
         {
-            // 右クリックの場合はタブ名が設定済。アプリケーションキーの場合は現在のタブを対象とする
+            // 右クリックの場合はDocumentManagerTabContainerが設定したタブ名を使用
+            if (!MyCommon.IsNullOrEmpty(this.ListTab.RightClickedTabName))
+                this.rclickTabName = this.ListTab.RightClickedTabName;
+
+            // アプリケーションキーの場合やタブ名が未設定の場合は現在のタブを対象とする
             if (MyCommon.IsNullOrEmpty(this.rclickTabName) || sender != this.ContextMenuTabProperty)
                 this.rclickTabName = this.CurrentTabName;
 
@@ -6049,14 +5798,7 @@ namespace OpenTween
             var tab = this.statuses.Tabs[tabName];
             tab.UnreadManage = isManage;
 
-            if (this.settings.Common.TabIconDisp)
-            {
-                var tabPage = this.ListTab.TabPages[idx];
-                if (tab.UnreadCount > 0)
-                    tabPage.ImageIndex = 0;
-                else
-                    tabPage.ImageIndex = -1;
-            }
+            this.ListTab.SetTabUnreadState(tabName, tab.UnreadCount > 0);
 
             if (this.CurrentTabName == tabName)
             {
@@ -6174,7 +5916,7 @@ namespace OpenTween
                     if (tabUsage == MyCommon.TabUsageType.PublicSearch)
                     {
                         this.ListTab.SelectedIndex = tabIndex;
-                        var panel = this.CurrentTabPage.Controls.OfType<PublicSearchHeaderPanel>().First();
+                        var panel = (PublicSearchHeaderPanel)this.CurrentContentPanel.HeaderPanel!;
                         panel.FocusToQuery();
                     }
                     if (tabUsage == MyCommon.TabUsageType.Lists)
@@ -6424,7 +6166,7 @@ namespace OpenTween
                     tab = dialog.SelectedTab;
                 }
 
-                this.CurrentTabPage.Focus();
+                this.CurrentContentPanel.Focus();
                 // 新規タブを選択→タブ作成
                 if (tab == null)
                 {
@@ -6618,11 +6360,7 @@ namespace OpenTween
                 this.listCache?.UpdateListSize();
             }
 
-            var tabIndex = this.statuses.Tabs.IndexOf(tabName);
-            var tabPage = this.ListTab.TabPages[tabIndex];
-            tabPage.ImageIndex = -1;
-
-            if (!this.settings.Common.TabIconDisp) this.ListTab.Refresh();
+            this.ListTab.SetTabUnreadState(tabName, false);
 
             this.SetMainWindowTitle();
             this.SetStatusLabelUrl();
@@ -7332,17 +7070,18 @@ namespace OpenTween
 
         private void MenuStrip1_MenuDeactivate(object sender, EventArgs e)
         {
-            var currentTabPage = this.CurrentTabPage;
+            var currentContentPanel = this.CurrentContentPanel;
+            var currentListView = this.CurrentListView;
             if (this.Tag != null) // 設定された戻り先へ遷移
             {
-                if (this.Tag == currentTabPage)
-                    ((Control)currentTabPage.Tag).Select();
+                if (this.Tag == currentContentPanel)
+                    currentListView.Select();
                 else
                     ((Control)this.Tag).Select();
             }
             else // 戻り先が指定されていない (初期状態) 場合はタブに遷移
             {
-                this.Tag = currentTabPage.Tag;
+                this.Tag = currentListView;
                 ((Control)this.Tag).Select();
             }
             // フォーカスがメニューに遷移したかどうかを表すフラグを降ろす
@@ -7610,8 +7349,6 @@ namespace OpenTween
             if (this.listViewState.TryGetValue(previousTabName, out var previousListViewState))
                 previousListViewState.Save(this.ListLockMenuItem.Checked);
 
-            this.listCache?.PurgeCache();
-
             this.statuses.SelectTab(tabName);
 
             this.InitializeTimelineListView();
@@ -7635,27 +7372,36 @@ namespace OpenTween
                     listView.Columns[i].Text = this.columnText[i];
                 }
             }
+
+            listView.Refresh();
         }
 
         private void InitializeTimelineListView()
         {
             var listView = this.CurrentListView;
             var tab = this.CurrentTab;
+            var tabName = tab.TabName;
+
+            // 既にこのタブ用の cache/drawer が存在する場合は再利用
+            if (this.listCaches.ContainsKey(tabName))
+                return;
 
             var newCache = new TimelineListViewCache(listView, tab, this.settings.Common);
-            (this.listCache, var oldCache) = (newCache, this.listCache);
-            oldCache?.Dispose();
+            if (this.listCaches.TryGetValue(tabName, out var oldCache))
+                oldCache.Dispose();
+            this.listCaches[tabName] = newCache;
 
-            var newDrawer = new TimelineListViewDrawer(listView, tab, this.listCache, this.iconCache, this.themeManager);
-            (this.listDrawer, var oldDrawer) = (newDrawer, this.listDrawer);
-            oldDrawer?.Dispose();
+            var newDrawer = new TimelineListViewDrawer(listView, tab, newCache, this.iconCache, this.themeManager);
+            if (this.listDrawers.TryGetValue(tabName, out var oldDrawer))
+                oldDrawer.Dispose();
+            this.listDrawers[tabName] = newDrawer;
 
             newDrawer.IconSize = this.settings.Common.IconSize;
             newDrawer.UpdateItemHeight();
         }
 
-        private void ListTab_Selecting(object sender, TabControlCancelEventArgs e)
-            => this.ListTabSelect(e.TabPage.Text);
+        private void ListTab_Selecting(object? sender, TabSelectingEventArgs e)
+            => this.ListTabSelect(e.TabName);
 
         private void SelectListItem(DetailsListView lView, int index)
         {
@@ -8327,7 +8073,7 @@ namespace OpenTween
         {
             // 公式検索
             var tb = (PublicSearchTabModel)this.CurrentTab;
-            var panel = this.CurrentTabPage.Controls.OfType<PublicSearchHeaderPanel>().First();
+            var panel = (PublicSearchHeaderPanel)this.CurrentContentPanel.HeaderPanel!;
             var query = panel.Query;
             var lang = panel.Lang;
 
@@ -8453,7 +8199,7 @@ namespace OpenTween
             var tab = this.CurrentTab;
             if (tab.TabType != MyCommon.TabUsageType.PublicSearch) return;
 
-            var panel = this.CurrentTabPage.Controls.OfType<PublicSearchHeaderPanel>().First();
+            var panel = (PublicSearchHeaderPanel)this.CurrentContentPanel.HeaderPanel!;
             panel.FocusToQuery();
         }
 
@@ -9049,8 +8795,7 @@ namespace OpenTween
             {
                 // TODO: 非同期更新中にタブが閉じられている場合を厳密に考慮したい
 
-                var tabPage = this.ListTab.TabPages[tabIndex];
-                var listView = (DetailsListView)tabPage.Tag;
+                var listView = this.ListTab.GetListView(tabRelated.TabName)!;
                 var targetPost = tabRelated.TargetPost;
                 var index = tabRelated.IndexOf(targetPost.RetweetedId ?? targetPost.StatusId);
 
@@ -9272,9 +9017,9 @@ namespace OpenTween
 
             if (this.Use2ColumnsMode != oldIconCol)
             {
-                foreach (TabPage tp in this.ListTab.TabPages)
+                foreach (var lst in this.ListTab.GetAllListViews())
                 {
-                    this.ResetColumns((DetailsListView)tp.Tag);
+                    this.ResetColumns(lst);
                 }
             }
 

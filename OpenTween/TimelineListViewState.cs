@@ -248,21 +248,24 @@ namespace OpenTween
             // status_id から ListView 上のインデックスに変換
             if (listSelection.SelectedStatusIds != null)
             {
-                var selectedIndices = this.tab.IndexOf(listSelection.SelectedStatusIds).Where(x => x != -1).ToArray();
+                var listSize = this.listView.VirtualListSize;
+                var selectedIndices = this.tab.IndexOf(listSelection.SelectedStatusIds)
+                    .Where(x => x >= 0 && x < listSize)
+                    .ToArray();
                 this.listView.SelectItems(selectedIndices);
             }
 
             if (listSelection.FocusedStatusId != null)
             {
                 var focusedIndex = this.tab.IndexOf(listSelection.FocusedStatusId);
-                if (focusedIndex != -1)
+                if (focusedIndex >= 0 && focusedIndex < this.listView.VirtualListSize)
                     this.listView.Items[focusedIndex].Focused = true;
             }
 
             if (listSelection.SelectionMarkStatusId != null)
             {
                 var selectionMarkIndex = this.tab.IndexOf(listSelection.SelectionMarkStatusId);
-                if (selectionMarkIndex != -1)
+                if (selectionMarkIndex >= 0 && selectionMarkIndex < this.listView.VirtualListSize)
                     this.listView.SelectionMark = selectionMarkIndex;
             }
 

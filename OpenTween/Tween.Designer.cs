@@ -37,7 +37,7 @@
             this.HashManagePullDownMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.SplitContainer1 = new OpenTween.OTSplitContainer();
             this.TimelinePanel = new System.Windows.Forms.Panel();
-            this.ListTab = new System.Windows.Forms.TabControl();
+            this.ListTab = new OpenTween.Controls.DocumentManagerTabContainer();
             this.ContextMenuTabProperty = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.AddTabMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.TabRenameMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -485,24 +485,12 @@
             // ListTab
             // 
             resources.ApplyResources(this.ListTab, "ListTab");
-            this.ListTab.AllowDrop = true;
-            this.ListTab.ContextMenuStrip = this.ContextMenuTabProperty;
-            this.ListTab.ImageList = this.TabImage;
-            this.ListTab.Multiline = true;
             this.ListTab.Name = "ListTab";
-            this.ListTab.SelectedIndex = 0;
-            this.ListTab.TabStop = false;
-            this.ListTab.SelectedIndexChanged += new System.EventHandler(this.ListTab_SelectedIndexChanged);
-            this.ListTab.Selecting += new System.Windows.Forms.TabControlCancelEventHandler(this.ListTab_Selecting);
-            this.ListTab.Deselected += new System.Windows.Forms.TabControlEventHandler(this.ListTab_Deselected);
-            this.ListTab.DragDrop += new System.Windows.Forms.DragEventHandler(this.ListTab_DragDrop);
-            this.ListTab.DragEnter += new System.Windows.Forms.DragEventHandler(this.ListTab_DragEnter);
-            this.ListTab.KeyDown += new System.Windows.Forms.KeyEventHandler(this.ListTab_KeyDown);
-            this.ListTab.MouseClick += new System.Windows.Forms.MouseEventHandler(this.ListTab_MouseClick);
-            this.ListTab.MouseDoubleClick += new System.Windows.Forms.MouseEventHandler(this.ListTab_DoubleClick);
-            this.ListTab.MouseDown += new System.Windows.Forms.MouseEventHandler(this.ListTab_MouseDown);
-            this.ListTab.MouseMove += new System.Windows.Forms.MouseEventHandler(this.ListTab_MouseMove);
-            this.ListTab.MouseUp += new System.Windows.Forms.MouseEventHandler(this.ListTab_MouseUp);
+            this.ListTab.TabContextMenuStrip = this.ContextMenuTabProperty;
+            this.ListTab.SelectedTabChanged += new System.EventHandler(this.ListTab_SelectedIndexChanged);
+            this.ListTab.TabSelecting += new System.EventHandler<OpenTween.Controls.TabSelectingEventArgs>(this.ListTab_Selecting);
+            this.ListTab.TabDeselected += new System.EventHandler<OpenTween.Controls.TabDeselectedEventArgs>(this.ListTab_Deselected);
+            this.ListTab.TabKeyDown += new System.Windows.Forms.KeyEventHandler(this.ListTab_KeyDown);
             // 
             // ContextMenuTabProperty
             // 
@@ -2199,7 +2187,7 @@
         internal System.Windows.Forms.ToolStripMenuItem HashManagePullDownMenuItem;
         internal OTSplitContainer SplitContainer1;
         internal System.Windows.Forms.Panel TimelinePanel;
-        internal System.Windows.Forms.TabControl ListTab;
+        internal OpenTween.Controls.DocumentManagerTabContainer ListTab;
         internal System.Windows.Forms.ContextMenuStrip ContextMenuTabProperty;
         internal System.Windows.Forms.ToolStripMenuItem AddTabMenuItem;
         internal System.Windows.Forms.ToolStripMenuItem TabRenameMenuItem;
