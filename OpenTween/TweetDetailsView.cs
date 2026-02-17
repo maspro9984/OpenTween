@@ -92,6 +92,11 @@ namespace OpenTween
         private ThemeManager? themeManager;
         private DetailsHtmlBuilder? detailsHtmlBuilder;
 
+        private LinkPreviewForm? linkPreviewForm;
+        private System.Windows.Forms.Timer? linkHoverTimer;
+        private System.Windows.Forms.Timer? linkHideDelayTimer;
+        private string? pendingPreviewUrl;
+
         public TweetDetailsView()
         {
             this.InitializeComponent();
@@ -559,15 +564,78 @@ namespace OpenTween
                     || this.PostBrowser.StatusText.StartsWith("data", StringComparison.Ordinal))
                 {
                     this.RaiseStatusChanged(this.PostBrowser.StatusText.Replace("&", "&&"));
+
+                    // リンクホバープレビュー開始
+                    if (this.PostBrowser.StatusText.StartsWith("http", StringComparison.Ordinal))
+                        this.StartLinkHoverTimer(this.PostBrowser.StatusText);
                 }
                 if (MyCommon.IsNullOrEmpty(this.PostBrowser.StatusText))
                 {
                     this.RaiseStatusChanged(statusText: "");
+
+                    // リンクホバープレビュー終了
+                    this.StartLinkHideDelayTimer();
                 }
             }
             catch (Exception)
             {
             }
+        }
+
+        private void StartLinkHoverTimer(string url)
+        {
+            // 非表示遅延タイマーをキャンセル（リンク間を移動した場合）
+            this.linkHideDelayTimer?.Stop();
+
+            this.pendingPreviewUrl = url;
+
+            this.linkHoverTimer?.Stop();
+            this.linkHoverTimer?.Dispose();
+            this.linkHoverTimer = new System.Windows.Forms.Timer { Interval = 500 };
+            this.linkHoverTimer.Tick += this.LinkHoverTimer_Tick;
+            this.linkHoverTimer.Start();
+        }
+
+        private void StartLinkHideDelayTimer()
+        {
+            this.linkHoverTimer?.Stop();
+
+            this.linkHideDelayTimer?.Stop();
+            this.linkHideDelayTimer?.Dispose();
+            this.linkHideDelayTimer = new System.Windows.Forms.Timer { Interval = 200 };
+            this.linkHideDelayTimer.Tick += this.LinkHideDelayTimer_Tick;
+            this.linkHideDelayTimer.Start();
+        }
+
+        private void LinkHoverTimer_Tick(object? sender, EventArgs e)
+        {
+            this.linkHoverTimer?.Stop();
+
+            if (this.pendingPreviewUrl == null)
+                return;
+
+            if (this.linkPreviewForm == null || this.linkPreviewForm.IsDisposed)
+            {
+                this.linkPreviewForm = new LinkPreviewForm();
+                this.linkPreviewForm.PreviewHidden += this.LinkPreviewForm_PreviewHidden;
+            }
+
+            this.linkPreviewForm.ShowPreview(this.pendingPreviewUrl, Cursor.Position);
+        }
+
+        private void LinkHideDelayTimer_Tick(object? sender, EventArgs e)
+        {
+            this.linkHideDelayTimer?.Stop();
+
+            // マウスがプレビューフォーム上にある場合は閉じない
+            if (this.linkPreviewForm != null && this.linkPreviewForm.IsMouseOver)
+                return;
+
+            this.linkPreviewForm?.HidePreview();
+        }
+
+        private void LinkPreviewForm_PreviewHidden(object? sender, EventArgs e)
+        {
         }
 
         private async void SourceLinkLabel_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
