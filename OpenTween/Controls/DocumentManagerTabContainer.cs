@@ -7,21 +7,16 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using DevExpress.XtraBars.Docking;
-using DevExpress.XtraBars.Docking2010;
-using DevExpress.XtraBars.Docking2010.Views;
-using DevExpress.XtraBars.Docking2010.Views.Tabbed;
 using OpenTween.OpenTweenCustomControl;
 
 namespace OpenTween.Controls
 {
     public class DocumentManagerTabContainer : UserControl
     {
-        private readonly DocumentManager documentManager;
-        private readonly TabbedView tabbedView;
         private readonly DockManager dockManager;
 
-        /// <summary>タブ名 → (Document, TimelineContentPanel) のマッピング</summary>
-        private readonly Dictionary<string, (BaseDocument Document, TimelineContentPanel Content)> tabMap = new();
+        /// <summary>タブ名 → (DockPanel, TimelineContentPanel) のマッピング</summary>
+        private readonly Dictionary<string, (DockPanel Panel, TimelineContentPanel Content)> tabMap = new();
 
         /// <summary>タブの順序を管理するリスト</summary>
         private readonly List<string> tabOrder = new();
@@ -29,7 +24,16 @@ namespace OpenTween.Controls
         /// <summary>DockPanel 名 → コンテンツコントロール（レイアウト復元後の再配置用）</summary>
         private readonly Dictionary<string, Control> detailPanelContents = new();
 
+        /// <summary>タブ名 → コンテンツコントロール（レイアウト復元後の再配置用）</summary>
+        private readonly Dictionary<string, Control> tabPanelContents = new();
+
         private bool suppressEvents;
+
+        /// <summary>タイムラインタブのコンテナパネル参照</summary>
+        private DockPanel? timelineTabContainer;
+
+        /// <summary>現在アクティブなタブ名</summary>
+        private string? currentActiveTabName;
 
         public ContextMenuStrip? TabContextMenuStrip { get; set; }
 
@@ -40,12 +44,10 @@ namespace OpenTween.Controls
         {
             get
             {
-                var activeDoc = this.tabbedView.ActiveDocument;
-                if (activeDoc == null)
+                if (this.currentActiveTabName == null)
                     return -1;
 
-                var tabName = activeDoc.Caption;
-                return this.tabOrder.IndexOf(tabName);
+                return this.tabOrder.IndexOf(this.currentActiveTabName);
             }
 
             set
@@ -55,7 +57,7 @@ namespace OpenTween.Controls
 
                 var tabName = this.tabOrder[value];
                 if (this.tabMap.TryGetValue(tabName, out var entry))
-                    this.tabbedView.ActivateDocument(entry.Content);
+                    this.dockManager.ActivePanel = entry.Panel;
             }
         }
 
@@ -75,35 +77,13 @@ namespace OpenTween.Controls
         {
             this.Dock = DockStyle.Fill;
 
-            this.documentManager = new DocumentManager
-            {
-                ContainerControl = this,
-            };
-
-            this.tabbedView = new TabbedView();
-
-            this.tabbedView.DocumentProperties.AllowClose = false;
-            this.tabbedView.DocumentProperties.AllowFloat = true;
-            this.tabbedView.DocumentProperties.AllowDock = true;
-            this.tabbedView.DocumentProperties.AllowDockFill = true;
-            this.tabbedView.DocumentProperties.AllowPin = false;
-
-            this.tabbedView.EnableFreeLayoutMode = DevExpress.Utils.DefaultBoolean.True;
-            this.tabbedView.EnableStickySplitters = DevExpress.Utils.DefaultBoolean.True;
-            this.tabbedView.FloatingDocumentContainer = FloatingDocumentContainer.DocumentsHost;
-
-            this.tabbedView.DocumentGroupProperties.HeaderLocation = DevExpress.XtraTab.TabHeaderLocation.Top;
-
-            this.tabbedView.DocumentActivated += this.TabbedView_DocumentActivated;
-            this.tabbedView.DocumentDeactivated += this.TabbedView_DocumentDeactivated;
-            this.tabbedView.PopupMenuShowing += this.TabbedView_PopupMenuShowing;
-            this.MouseUp += this.Container_MouseUp;
-
-            this.documentManager.View = this.tabbedView;
-
             this.dockManager = new DockManager();
             this.dockManager.Form = this;
+            this.dockManager.DockingOptions.AllowDockToCenter = DevExpress.Utils.DefaultBoolean.True;
 
+            this.dockManager.ActivePanelChanged += this.DockManager_ActivePanelChanged;
+
+            this.MouseUp += this.Container_MouseUp;
             this.KeyDown += (s, e) => this.TabKeyDown?.Invoke(this, e);
         }
 
@@ -128,16 +108,35 @@ namespace OpenTween.Controls
             if (this.tabMap.ContainsKey(tabName))
                 return;
 
-            // DevExpress はコントロール名でドキュメントを識別するため、一意な名前を設定
             content.Name = tabName;
+            content.Dock = DockStyle.Fill;
 
-            var doc = this.tabbedView.AddDocument(content, tabName) as BaseDocument;
-            if (doc == null)
-                return;
+            DockPanel panel;
+            if (this.timelineTabContainer == null)
+            {
+                // 最初のタイムラインタブは中央（Fill）にドッキング
+                panel = this.dockManager.AddPanel(DockingStyle.Fill);
+                this.timelineTabContainer = panel;
+            }
+            else
+            {
+                // 後続のタブは既存コンテナにタブとして追加
+                panel = this.dockManager.AddPanel(DockingStyle.Float);
+                panel.DockAsTab(this.timelineTabContainer);
+            }
 
-            doc.Caption = tabName;
-            this.tabMap[tabName] = (doc, content);
+            panel.Text = tabName;
+            panel.Name = "TimelineTab_" + tabName;
+            panel.Options.ShowCloseButton = false;
+            panel.ControlContainer.Controls.Add(content);
+
+            this.tabMap[tabName] = (panel, content);
+            this.tabPanelContents[tabName] = content;
             this.tabOrder.Add(tabName);
+
+            // DockAsTab 後に ParentPanel がタブコンテナに変わる場合は参照を更新
+            if (panel.ParentPanel != null && panel.ParentPanel.Tabbed)
+                this.timelineTabContainer = panel.ParentPanel;
         }
 
         /// <summary>
@@ -181,13 +180,16 @@ namespace OpenTween.Controls
             this.suppressEvents = true;
             try
             {
-                // AllowClose=false のため、一時的に許可してから閉じる
-                if (entry.Document is Document doc)
-                    doc.Properties.AllowClose = DevExpress.Utils.DefaultBoolean.True;
+                // コンテンツコントロールを退避してからパネルを削除
+                entry.Content.Parent?.Controls.Remove(entry.Content);
+                this.dockManager.RemovePanel(entry.Panel);
 
-                this.tabbedView.Controller.Close(entry.Document);
                 this.tabMap.Remove(tabName);
+                this.tabPanelContents.Remove(tabName);
                 this.tabOrder.Remove(tabName);
+
+                if (this.tabMap.Count == 0)
+                    this.timelineTabContainer = null;
             }
             finally
             {
@@ -202,12 +204,15 @@ namespace OpenTween.Controls
 
             var tabName = this.tabOrder[index];
             if (this.tabMap.TryGetValue(tabName, out var entry))
-                this.tabbedView.ActivateDocument(entry.Content);
+                this.dockManager.ActivePanel = entry.Panel;
         }
 
         public void MoveTab(string targetTabName, int newIndex)
         {
             if (!this.tabOrder.Contains(targetTabName))
+                return;
+
+            if (!this.tabMap.TryGetValue(targetTabName, out var entry))
                 return;
 
             this.tabOrder.Remove(targetTabName);
@@ -216,6 +221,9 @@ namespace OpenTween.Controls
                 newIndex = this.tabOrder.Count;
 
             this.tabOrder.Insert(newIndex, targetTabName);
+
+            // DockPanel のタブコンテナ内の位置も変更
+            entry.Panel.Index = newIndex;
         }
 
         public void SetTabUnreadState(string tabName, bool hasUnread)
@@ -226,16 +234,17 @@ namespace OpenTween.Controls
             if (!this.tabMap.TryGetValue(tabName, out var entry))
                 return;
 
-            var doc = entry.Document as Document;
-            if (doc == null)
-                return;
-
             try
             {
                 if (hasUnread)
-                    doc.Appearance.Header.ForeColor = Color.Red;
+                {
+                    entry.Panel.Appearance.ForeColor = Color.Red;
+                    entry.Panel.Appearance.Options.UseForeColor = true;
+                }
                 else
-                    doc.Appearance.Header.Reset();
+                {
+                    entry.Panel.Appearance.Reset();
+                }
             }
             catch (NullReferenceException)
             {
@@ -248,15 +257,23 @@ namespace OpenTween.Controls
             if (!this.tabMap.TryGetValue(oldName, out var entry))
                 return;
 
-            entry.Document.Caption = newName;
+            entry.Panel.Text = newName;
+            entry.Panel.Name = "TimelineTab_" + newName;
             entry.Content.TabName = newName;
             entry.Content.Name = newName;
+
             this.tabMap.Remove(oldName);
             this.tabMap[newName] = entry;
+
+            this.tabPanelContents.Remove(oldName);
+            this.tabPanelContents[newName] = entry.Content;
 
             var index = this.tabOrder.IndexOf(oldName);
             if (index >= 0)
                 this.tabOrder[index] = newName;
+
+            if (this.currentActiveTabName == oldName)
+                this.currentActiveTabName = newName;
         }
 
         public IEnumerable<DetailsListView> GetAllListViews()
@@ -270,19 +287,47 @@ namespace OpenTween.Controls
                 .Select(name => this.tabMap[name].Content);
 
         public void SetTabHeaderLocation(DevExpress.XtraTab.TabHeaderLocation location)
-            => this.tabbedView.DocumentGroupProperties.HeaderLocation = location;
+        {
+            if (this.timelineTabContainer == null)
+                return;
 
-        private void TabbedView_DocumentActivated(object sender, DocumentEventArgs e)
+            var tabsPosition = location switch
+            {
+                DevExpress.XtraTab.TabHeaderLocation.Top => TabsPosition.Top,
+                DevExpress.XtraTab.TabHeaderLocation.Bottom => TabsPosition.Bottom,
+                DevExpress.XtraTab.TabHeaderLocation.Left => TabsPosition.Left,
+                DevExpress.XtraTab.TabHeaderLocation.Right => TabsPosition.Right,
+                _ => TabsPosition.Top,
+            };
+
+            this.timelineTabContainer.TabsPosition = tabsPosition;
+        }
+
+        private void DockManager_ActivePanelChanged(object sender, ActivePanelChangedEventArgs e)
         {
             if (this.suppressEvents)
                 return;
 
-            var tabName = e.Document?.Caption;
-            if (tabName == null)
+            // 旧パネルの非アクティブ化（TabDeselected 相当）
+            if (e.OldPanel != null)
+            {
+                var oldTabName = this.FindTabNameByPanel(e.OldPanel);
+                if (oldTabName != null)
+                    this.TabDeselected?.Invoke(this, new TabDeselectedEventArgs(oldTabName));
+            }
+
+            // 新パネルのアクティブ化（DocumentActivated 相当）
+            var newPanel = e.Panel;
+            if (newPanel == null)
                 return;
 
-            // DetailPanel など tabMap に存在しないドキュメントのアクティブ化は無視
-            if (!this.tabMap.ContainsKey(tabName))
+            var tabName = this.FindTabNameByPanel(newPanel);
+
+            // タブコンテナ自体がアクティブになった場合は ActiveChild を確認
+            if (tabName == null && newPanel.Tabbed && newPanel.ActiveChild != null)
+                tabName = this.FindTabNameByPanel(newPanel.ActiveChild);
+
+            if (tabName == null)
                 return;
 
             var selectingArgs = new TabSelectingEventArgs(tabName);
@@ -290,31 +335,21 @@ namespace OpenTween.Controls
             if (selectingArgs.Cancel)
                 return;
 
+            this.currentActiveTabName = tabName;
             this.SelectedTabChanged?.Invoke(this, EventArgs.Empty);
         }
 
-        private void TabbedView_DocumentDeactivated(object sender, DocumentEventArgs e)
+        /// <summary>
+        /// tabMap から DockPanel に対応するタブ名を検索する
+        /// </summary>
+        private string? FindTabNameByPanel(DockPanel panel)
         {
-            if (this.suppressEvents)
-                return;
-
-            var prevTabName = e.Document?.Caption;
-            if (prevTabName != null && !this.tabMap.ContainsKey(prevTabName))
-                return;
-
-            this.TabDeselected?.Invoke(this, new TabDeselectedEventArgs(prevTabName));
-        }
-
-        private void TabbedView_PopupMenuShowing(object sender, DevExpress.XtraBars.Docking2010.Views.PopupMenuShowingEventArgs e)
-        {
-            // DevExpress 標準のポップアップメニューを抑制し、独自のコンテキストメニューを表示
-            e.Cancel = true;
-
-            // PopupMenuShowing 発火時点で DevExpress は右クリック対象のドキュメントをアクティブにしている
-            this.RightClickedTabName = this.tabbedView.ActiveDocument?.Caption;
-
-            if (this.TabContextMenuStrip != null)
-                this.TabContextMenuStrip.Show(Cursor.Position);
+            foreach (var kvp in this.tabMap)
+            {
+                if (kvp.Value.Panel == panel)
+                    return kvp.Key;
+            }
+            return null;
         }
 
         private void Container_MouseUp(object? sender, MouseEventArgs e)
@@ -329,20 +364,7 @@ namespace OpenTween.Controls
         {
             try
             {
-                // TabbedView レイアウト保存
-                if (this.tabbedView.DocumentGroups.Count <= 1)
-                {
-                    if (File.Exists(filePath))
-                        File.Delete(filePath);
-                }
-                else
-                {
-                    this.tabbedView.SaveLayoutToXml(filePath);
-                }
-
-                // DockManager レイアウト保存
-                var dockLayoutPath = filePath + ".dock";
-                this.dockManager.SaveLayoutToXml(dockLayoutPath);
+                this.dockManager.SaveLayoutToXml(filePath);
             }
             catch (Exception)
             {
@@ -353,23 +375,24 @@ namespace OpenTween.Controls
         {
             try
             {
+                if (!File.Exists(filePath))
+                    return;
+
                 this.suppressEvents = true;
 
-                // TabbedView レイアウト復元
-                if (File.Exists(filePath))
-                    this.tabbedView.RestoreLayoutFromXml(filePath);
+                // コンテンツコントロールを退避（RestoreLayoutFromXml がパネルを
+                // 再生成する際にコントロールが破棄されるのを防止する）
+                this.DetachDetailPanelContents();
+                this.DetachTabPanelContents();
 
-                // DockManager レイアウト復元
-                var dockLayoutPath = filePath + ".dock";
-                if (File.Exists(dockLayoutPath))
-                {
-                    // コンテンツコントロールを退避（RestoreLayoutFromXml がパネルを
-                    // 再生成する際にコントロールが破棄されるのを防止する）
-                    this.DetachDetailPanelContents();
+                this.dockManager.RestoreLayoutFromXml(filePath);
 
-                    this.dockManager.RestoreLayoutFromXml(dockLayoutPath);
-                    this.ReattachDetailPanelContents();
-                }
+                // 復元されたパネルにコンテンツコントロールを再配置
+                this.ReattachDetailPanelContents();
+                this.ReattachTabPanelContents();
+
+                // timelineTabContainer 参照を更新
+                this.UpdateTimelineTabContainerReference();
             }
             catch (Exception)
             {
@@ -394,6 +417,17 @@ namespace OpenTween.Controls
         }
 
         /// <summary>
+        /// タイムラインタブのコンテンツコントロールをパネルから退避する
+        /// </summary>
+        private void DetachTabPanelContents()
+        {
+            foreach (var content in this.tabPanelContents.Values)
+            {
+                content.Parent?.Controls.Remove(content);
+            }
+        }
+
+        /// <summary>
         /// DockManager のレイアウト復元後、復元されたパネルにコンテンツコントロールを再配置する
         /// </summary>
         private void ReattachDetailPanelContents()
@@ -403,14 +437,14 @@ namespace OpenTween.Controls
             // Panels と Name で直接マッチ
             foreach (DockPanel panel in this.dockManager.Panels)
             {
-                if (this.TryReattachContent(panel, out var matchedName) && matchedName != null)
+                if (this.TryReattachDetailContent(panel, out var matchedName) && matchedName != null)
                     attached.Add(matchedName);
             }
 
             // マッチしなかったコンテンツがある場合、RootPanels の子パネルも再帰探索
             foreach (DockPanel rootPanel in this.dockManager.RootPanels)
             {
-                this.ReattachContentRecursive(rootPanel, attached);
+                this.ReattachDetailContentRecursive(rootPanel, attached);
             }
 
             // レイアウト復元後にマッチしなかったコンテンツがあれば、新しいパネルを作成して配置
@@ -434,16 +468,83 @@ namespace OpenTween.Controls
             }
         }
 
-        private void ReattachContentRecursive(DockPanel panel, HashSet<string> attached)
+        /// <summary>
+        /// レイアウト復元後、タイムラインタブのコンテンツを復元されたパネルに再配置する
+        /// </summary>
+        private void ReattachTabPanelContents()
         {
-            if (this.TryReattachContent(panel, out var matchedName) && matchedName != null)
+            var attached = new HashSet<string>();
+
+            // Panels と Name で直接マッチ
+            foreach (DockPanel panel in this.dockManager.Panels)
+            {
+                if (this.TryReattachTabContent(panel, out var matchedName) && matchedName != null)
+                    attached.Add(matchedName);
+            }
+
+            // RootPanels の子パネルも再帰探索
+            foreach (DockPanel rootPanel in this.dockManager.RootPanels)
+            {
+                this.ReattachTabContentRecursive(rootPanel, attached);
+            }
+
+            // マッチしなかったコンテンツは新しいパネルを作成して配置
+            foreach (var kvp in this.tabPanelContents)
+            {
+                if (attached.Contains(kvp.Key))
+                    continue;
+
+                if (kvp.Value.Parent != null)
+                    continue;
+
+                DockPanel panel;
+                if (this.timelineTabContainer == null)
+                {
+                    panel = this.dockManager.AddPanel(DockingStyle.Fill);
+                    this.timelineTabContainer = panel;
+                }
+                else
+                {
+                    panel = this.dockManager.AddPanel(DockingStyle.Float);
+                    panel.DockAsTab(this.timelineTabContainer);
+                }
+
+                panel.Text = kvp.Key;
+                panel.Name = "TimelineTab_" + kvp.Key;
+                panel.Options.ShowCloseButton = false;
+                kvp.Value.Dock = DockStyle.Fill;
+                panel.ControlContainer.Controls.Add(kvp.Value);
+
+                // tabMap のパネル参照を更新
+                if (this.tabMap.ContainsKey(kvp.Key))
+                    this.tabMap[kvp.Key] = (panel, (TimelineContentPanel)kvp.Value);
+
+                if (panel.ParentPanel != null && panel.ParentPanel.Tabbed)
+                    this.timelineTabContainer = panel.ParentPanel;
+
+                attached.Add(kvp.Key);
+            }
+        }
+
+        private void ReattachDetailContentRecursive(DockPanel panel, HashSet<string> attached)
+        {
+            if (this.TryReattachDetailContent(panel, out var matchedName) && matchedName != null)
                 attached.Add(matchedName);
 
             for (var i = 0; i < panel.Count; i++)
-                this.ReattachContentRecursive(panel[i], attached);
+                this.ReattachDetailContentRecursive(panel[i], attached);
         }
 
-        private bool TryReattachContent(DockPanel panel, out string? matchedName)
+        private void ReattachTabContentRecursive(DockPanel panel, HashSet<string> attached)
+        {
+            if (this.TryReattachTabContent(panel, out var matchedName) && matchedName != null)
+                attached.Add(matchedName);
+
+            for (var i = 0; i < panel.Count; i++)
+                this.ReattachTabContentRecursive(panel[i], attached);
+        }
+
+        private bool TryReattachDetailContent(DockPanel panel, out string? matchedName)
         {
             matchedName = null;
 
@@ -473,12 +574,72 @@ namespace OpenTween.Controls
             return true;
         }
 
+        private bool TryReattachTabContent(DockPanel panel, out string? matchedName)
+        {
+            matchedName = null;
+
+            if (panel.ControlContainer == null)
+                return false;
+
+            // "TimelineTab_" プレフィックス付き Name または Text でマッチ
+            string? contentKey = null;
+            foreach (var kvp in this.tabPanelContents)
+            {
+                if (panel.Name == "TimelineTab_" + kvp.Key || panel.Text == kvp.Key)
+                {
+                    contentKey = kvp.Key;
+                    break;
+                }
+            }
+
+            if (contentKey == null)
+                return false;
+
+            var content = this.tabPanelContents[contentKey];
+            matchedName = contentKey;
+
+            // 既に配置済みなら再配置しない
+            if (content.Parent == panel.ControlContainer)
+            {
+                // tabMap のパネル参照を更新
+                if (this.tabMap.ContainsKey(contentKey))
+                    this.tabMap[contentKey] = (panel, (TimelineContentPanel)content);
+                return true;
+            }
+
+            content.Dock = DockStyle.Fill;
+            panel.ControlContainer.Controls.Add(content);
+
+            // tabMap のパネル参照を更新
+            if (this.tabMap.ContainsKey(contentKey))
+                this.tabMap[contentKey] = (panel, (TimelineContentPanel)content);
+
+            return true;
+        }
+
+        /// <summary>
+        /// レイアウト復元後、timelineTabContainer 参照を更新する
+        /// </summary>
+        private void UpdateTimelineTabContainerReference()
+        {
+            this.timelineTabContainer = null;
+
+            if (this.tabMap.Count == 0)
+                return;
+
+            // 最初のタイムラインパネルの親をコンテナとして設定
+            var firstEntry = this.tabMap.Values.First();
+            if (firstEntry.Panel.ParentPanel != null && firstEntry.Panel.ParentPanel.Tabbed)
+                this.timelineTabContainer = firstEntry.Panel.ParentPanel;
+            else
+                this.timelineTabContainer = firstEntry.Panel;
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)
             {
                 this.dockManager.Dispose();
-                this.documentManager.Dispose();
             }
 
             base.Dispose(disposing);
