@@ -144,9 +144,9 @@ namespace OpenTween
                 {
                     nameText = "";
                 }
-                nameText += post.ScreenName + "/" + post.Nickname;
                 if (post.RetweetedId != null)
-                    nameText += $" (RT:{post.RetweetedBy})";
+                    nameText += $"(RT:{post.RetweetedBy}) ";
+                nameText += post.ScreenName + "/" + post.Nickname;
 
                 this.NameLinkLabel.Text = nameText;
 

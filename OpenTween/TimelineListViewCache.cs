@@ -150,7 +150,7 @@ namespace OpenTween
                     "",
                     post.Nickname,
                     post.IsDeleted ? "(DELETED)" : post.AccessibleText.Replace('\n', ' '),
-                    post.CreatedAt.ToLocalTimeString(this.settings.DateTimeFormat),
+                    this.FormatDateTime(post.CreatedAt),
                     post.ScreenName,
                     "",
                     mk.ToString(),
@@ -165,7 +165,7 @@ namespace OpenTween
                     "",
                     post.Nickname,
                     post.IsDeleted ? "(DELETED)" : post.AccessibleText.Replace('\n', ' '),
-                    post.CreatedAt.ToLocalTimeString(this.settings.DateTimeFormat),
+                    this.FormatDateTime(post.CreatedAt),
                     post.ScreenName + Environment.NewLine + "(RT:" + post.RetweetedBy + ")",
                     "",
                     mk.ToString(),
@@ -271,6 +271,15 @@ namespace OpenTween
 
         private string GetUnreadMark(bool unreadMark)
             => unreadMark ? "★" : "";
+
+        private string FormatDateTime(DateTimeUtc createdAt)
+        {
+            var localTime = createdAt.ToLocalTime();
+            if (localTime.Date == DateTimeOffset.Now.Date)
+                return localTime.ToString("H:mm");
+            else
+                return localTime.ToString("M/d H:mm");
+        }
 
         private ListItemStyle DetermineListItemStyle(PostClass post)
         {
