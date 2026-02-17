@@ -198,7 +198,7 @@ namespace OpenTween
 
                     // ロード中に index の指す行が変化している可能性がある
                     var newIndex = this.tab.IndexOf(post.StatusId);
-                    if (newIndex != -1)
+                    if (newIndex >= 0 && newIndex < this.listView.VirtualListSize)
                         this.listView.RedrawItems(newIndex, newIndex, true);
                 }
 

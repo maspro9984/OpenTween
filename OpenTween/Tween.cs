@@ -1170,6 +1170,10 @@ namespace OpenTween
             }
             else
             {
+                // パネルレイアウトを保存
+                var layoutPath = Path.Combine(this.settings.SettingsPath, "DockLayout.xml");
+                this.ListTab.SaveLayout(layoutPath);
+
                 this.hookGlobalHotkey.UnregisterAllOriginalHotkey();
                 this.ignoreConfigSave = true;
                 MyCommon.EndingFlag = true;
@@ -7432,6 +7436,10 @@ namespace OpenTween
 
         private async void TweenMain_Shown(object sender, EventArgs e)
         {
+            // パネルレイアウトを復元
+            var layoutPath = Path.Combine(this.settings.SettingsPath, "DockLayout.xml");
+            this.ListTab.RestoreLayout(layoutPath);
+
             this.NotifyIcon1.Visible = true;
             this.StartTimers();
 

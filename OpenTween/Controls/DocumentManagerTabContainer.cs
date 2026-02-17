@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using DevExpress.XtraBars.Docking2010;
@@ -80,6 +81,9 @@ namespace OpenTween.Controls
             this.tabbedView.DocumentProperties.AllowFloat = true;
             this.tabbedView.DocumentProperties.AllowPin = false;
 
+            this.tabbedView.EnableFreeLayoutMode = DevExpress.Utils.DefaultBoolean.True;
+            this.tabbedView.EnableStickySplitters = DevExpress.Utils.DefaultBoolean.True;
+
             this.tabbedView.DocumentGroupProperties.HeaderLocation = DevExpress.XtraTab.TabHeaderLocation.Top;
 
             this.tabbedView.DocumentActivated += this.TabbedView_DocumentActivated;
@@ -112,6 +116,9 @@ namespace OpenTween.Controls
         {
             if (this.tabMap.ContainsKey(tabName))
                 return;
+
+            // DevExpress はコントロール名でドキュメントを識別するため、一意な名前を設定
+            content.Name = tabName;
 
             var doc = this.tabbedView.AddDocument(content, tabName) as BaseDocument;
             if (doc == null)
@@ -199,6 +206,7 @@ namespace OpenTween.Controls
 
             entry.Document.Caption = newName;
             entry.Content.TabName = newName;
+            entry.Content.Name = newName;
             this.tabMap.Remove(oldName);
             this.tabMap[newName] = entry;
 
@@ -263,6 +271,45 @@ namespace OpenTween.Controls
             if (e.Button == MouseButtons.Middle)
             {
                 this.TabMouseClick?.Invoke(this, e);
+            }
+        }
+
+        public void SaveLayout(string filePath)
+        {
+            try
+            {
+                if (this.tabbedView.DocumentGroups.Count <= 1)
+                {
+                    // グループが1つ以下ならレイアウトファイルを削除（デフォルト状態）
+                    if (File.Exists(filePath))
+                        File.Delete(filePath);
+                    return;
+                }
+
+                this.tabbedView.SaveLayoutToXml(filePath);
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        public void RestoreLayout(string filePath)
+        {
+            if (!File.Exists(filePath))
+                return;
+
+            try
+            {
+                this.suppressEvents = true;
+                this.tabbedView.RestoreLayoutFromXml(filePath);
+            }
+            catch (Exception)
+            {
+                // レイアウトファイルの形式が異なる場合（旧形式など）は無視
+            }
+            finally
+            {
+                this.suppressEvents = false;
             }
         }
 
