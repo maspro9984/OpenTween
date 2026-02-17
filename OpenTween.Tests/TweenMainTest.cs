@@ -75,18 +75,17 @@ namespace OpenTween
         {
             this.UsingTweenMain((tweenMain, context) =>
             {
-                Assert.Equal(4, tweenMain.ListTab.TabPages.Count);
+                Assert.Equal(4, tweenMain.ListTab.TabCount);
 
                 var tab = new FilterTabModel("hoge");
                 context.TabInfo.AddTab(tab);
                 tweenMain.AddNewTab(tab, startup: false);
 
-                Assert.Equal(5, tweenMain.ListTab.TabPages.Count);
+                Assert.Equal(5, tweenMain.ListTab.TabCount);
 
-                var tabPage = tweenMain.ListTab.TabPages[4];
-                Assert.Equal("hoge", tabPage.Text);
-                Assert.Single(tabPage.Controls);
-                Assert.IsType<DetailsListView>(tabPage.Controls[0]);
+                var contentPanel = tweenMain.ListTab.GetContentPanelAt(4);
+                Assert.Equal("hoge", contentPanel.TabName);
+                Assert.IsType<DetailsListView>(contentPanel.ListView);
             });
         }
 
@@ -95,20 +94,19 @@ namespace OpenTween
         {
             this.UsingTweenMain((tweenMain, context) =>
             {
-                Assert.Equal(4, tweenMain.ListTab.TabPages.Count);
+                Assert.Equal(4, tweenMain.ListTab.TabCount);
 
                 var tab = new UserTimelineTabModel("hoge", "twitterapi");
                 context.TabInfo.AddTab(tab);
                 tweenMain.AddNewTab(tab, startup: false);
 
-                Assert.Equal(5, tweenMain.ListTab.TabPages.Count);
+                Assert.Equal(5, tweenMain.ListTab.TabCount);
 
-                var tabPage = tweenMain.ListTab.TabPages[4];
-                Assert.Equal("hoge", tabPage.Text);
-                Assert.Equal(2, tabPage.Controls.Count);
-                Assert.IsType<DetailsListView>(tabPage.Controls[0]);
+                var contentPanel = tweenMain.ListTab.GetContentPanelAt(4);
+                Assert.Equal("hoge", contentPanel.TabName);
+                Assert.IsType<DetailsListView>(contentPanel.ListView);
 
-                var header = Assert.IsType<GeneralTimelineHeaderPanel>(tabPage.Controls[1]);
+                var header = Assert.IsType<GeneralTimelineHeaderPanel>(contentPanel.HeaderPanel);
                 Assert.Equal("twitterapi's Timeline", header.HeaderText);
             });
         }
@@ -118,7 +116,7 @@ namespace OpenTween
         {
             this.UsingTweenMain((tweenMain, context) =>
             {
-                Assert.Equal(4, tweenMain.ListTab.TabPages.Count);
+                Assert.Equal(4, tweenMain.ListTab.TabCount);
 
                 var list = new ListElement
                 {
@@ -131,14 +129,13 @@ namespace OpenTween
                 context.TabInfo.AddTab(tab);
                 tweenMain.AddNewTab(tab, startup: false);
 
-                Assert.Equal(5, tweenMain.ListTab.TabPages.Count);
+                Assert.Equal(5, tweenMain.ListTab.TabCount);
 
-                var tabPage = tweenMain.ListTab.TabPages[4];
-                Assert.Equal("hoge", tabPage.Text);
-                Assert.Equal(2, tabPage.Controls.Count);
-                Assert.IsType<DetailsListView>(tabPage.Controls[0]);
+                var contentPanel = tweenMain.ListTab.GetContentPanelAt(4);
+                Assert.Equal("hoge", contentPanel.TabName);
+                Assert.IsType<DetailsListView>(contentPanel.ListView);
 
-                var header = Assert.IsType<GeneralTimelineHeaderPanel>(tabPage.Controls[1]);
+                var header = Assert.IsType<GeneralTimelineHeaderPanel>(contentPanel.HeaderPanel);
                 Assert.Equal("@opentween/tetete [Protected]", header.HeaderText);
             });
         }
@@ -148,7 +145,7 @@ namespace OpenTween
         {
             this.UsingTweenMain((tweenMain, context) =>
             {
-                Assert.Equal(4, tweenMain.ListTab.TabPages.Count);
+                Assert.Equal(4, tweenMain.ListTab.TabCount);
 
                 var tab = new PublicSearchTabModel("hoge")
                 {
@@ -158,14 +155,13 @@ namespace OpenTween
                 context.TabInfo.AddTab(tab);
                 tweenMain.AddNewTab(tab, startup: false);
 
-                Assert.Equal(5, tweenMain.ListTab.TabPages.Count);
+                Assert.Equal(5, tweenMain.ListTab.TabCount);
 
-                var tabPage = tweenMain.ListTab.TabPages[4];
-                Assert.Equal("hoge", tabPage.Text);
-                Assert.Equal(2, tabPage.Controls.Count);
-                Assert.IsType<DetailsListView>(tabPage.Controls[0]);
+                var contentPanel = tweenMain.ListTab.GetContentPanelAt(4);
+                Assert.Equal("hoge", contentPanel.TabName);
+                Assert.IsType<DetailsListView>(contentPanel.ListView);
 
-                var header = Assert.IsType<PublicSearchHeaderPanel>(tabPage.Controls[1]);
+                var header = Assert.IsType<PublicSearchHeaderPanel>(contentPanel.HeaderPanel);
                 Assert.Equal("#OpenTween", header.Query);
                 Assert.Equal("ja", header.Lang);
             });
@@ -176,7 +172,7 @@ namespace OpenTween
         {
             this.UsingTweenMain((tweenMain, context) =>
             {
-                Assert.Equal(4, tweenMain.ListTab.TabPages.Count);
+                Assert.Equal(4, tweenMain.ListTab.TabCount);
 
                 var tab = new PublicSearchTabModel("hoge")
                 {
@@ -185,18 +181,18 @@ namespace OpenTween
                 };
                 context.TabInfo.AddTab(tab);
                 tweenMain.AddNewTab(tab, startup: false);
-                Assert.Equal(5, tweenMain.ListTab.TabPages.Count);
+                Assert.Equal(5, tweenMain.ListTab.TabCount);
 
-                var tabPage = tweenMain.ListTab.TabPages[4];
-                var listView = (DetailsListView)tabPage.Controls[0];
-                var header = (PublicSearchHeaderPanel)tabPage.Controls[1];
-                Assert.Equal("hoge", tabPage.Text);
+                var contentPanel = tweenMain.ListTab.GetContentPanelAt(4);
+                var listView = contentPanel.ListView;
+                var header = (PublicSearchHeaderPanel)contentPanel.HeaderPanel!;
+                Assert.Equal("hoge", contentPanel.TabName);
 
                 tweenMain.RemoveSpecifiedTab("hoge", confirm: false);
 
-                Assert.Equal(4, tweenMain.ListTab.TabPages.Count);
+                Assert.Equal(4, tweenMain.ListTab.TabCount);
                 Assert.False(context.TabInfo.ContainsTab("hoge"));
-                Assert.True(tabPage.IsDisposed);
+                Assert.True(contentPanel.IsDisposed);
                 Assert.True(listView.IsDisposed);
                 Assert.True(header.IsDisposed);
             });
@@ -207,10 +203,10 @@ namespace OpenTween
         {
             this.UsingTweenMain((tweenMain, context) =>
             {
-                var tabPage = tweenMain.ListTab.TabPages[0];
-                Assert.Equal("Recent", tabPage.Text);
+                var contentPanel = tweenMain.ListTab.GetContentPanelAt(0);
+                Assert.Equal("Recent", contentPanel.TabName);
 
-                var listView = (DetailsListView)tabPage.Controls[0];
+                var listView = contentPanel.ListView;
                 Assert.Equal(0, listView.VirtualListSize);
 
                 var post = new PostClass

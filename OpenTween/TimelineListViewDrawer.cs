@@ -59,7 +59,7 @@ namespace OpenTween
             };
 
         private readonly DetailsListView listView;
-        private readonly OTBaseForm parentForm;
+        private readonly Form parentForm;
         private readonly TabModel tab;
         private readonly TimelineListViewCache listViewCache;
         private readonly ImageCache iconCache;
@@ -74,7 +74,7 @@ namespace OpenTween
         )
         {
             this.listView = listView;
-            this.parentForm = (OTBaseForm)listView.FindForm();
+            this.parentForm = listView.FindForm();
             this.tab = tab;
             this.listViewCache = listViewCache;
             this.iconCache = iconCache;
