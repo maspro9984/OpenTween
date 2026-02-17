@@ -125,33 +125,42 @@ namespace OpenTween.Api.GraphQL
             var quotedStatusPermalink = tweetLegacyElm.Element("quoted_status_permalink") ?? null;
             var isQuotedTweetTombstone = quotedTweetElm != null && GetTweetTypeName(quotedTweetElm) == "TweetTombstone";
 
+            // note_tweet: 長文ツイート（280文字超）のフルテキストとエンティティ
+            var noteTweetElm = tweetElm.XPathSelectElement("note_tweet/note_tweet_results/result");
+
             static string GetText(XElement elm, string name)
                 => elm.Element(name)?.Value ?? throw CreateParseError();
 
             static string? GetTextOrNull(XElement elm, string name)
                 => elm.Element(name)?.Value;
 
+            // note_tweet が存在する場合はそちらのテキストとエンティティを優先して使用
+            var fullText = noteTweetElm?.Element("text")?.Value
+                ?? GetText(tweetLegacyElm, "full_text");
+
+            var entitiesElm = noteTweetElm?.Element("entity_set") ?? tweetLegacyElm.Element("entities");
+
             return new()
             {
                 IdStr = GetText(tweetElm, "rest_id"),
                 Source = GetText(tweetElm, "source"),
                 CreatedAt = GetText(tweetLegacyElm, "created_at"),
-                FullText = GetText(tweetLegacyElm, "full_text"),
+                FullText = fullText,
                 InReplyToScreenName = GetTextOrNull(tweetLegacyElm, "in_reply_to_screen_name"),
                 InReplyToStatusIdStr = GetTextOrNull(tweetLegacyElm, "in_reply_to_status_id_str"),
                 InReplyToUserIdStr = GetTextOrNull(tweetLegacyElm, "in_reply_to_user_id_str"),
                 Favorited = GetTextOrNull(tweetLegacyElm, "favorited") is string favorited ? favorited == "true" : null,
                 Entities = new()
                 {
-                    UserMentions = tweetLegacyElm.XPathSelectElements("entities/user_mentions/item")
+                    UserMentions = (entitiesElm ?? tweetLegacyElm.Element("entities"))?.XPathSelectElements("user_mentions/item")
                         .Select(x => new TwitterEntityMention()
                         {
                             Indices = x.XPathSelectElements("indices/item").Select(x => int.Parse(x.Value)).ToArray(),
                             IdStr = GetText(x, "id_str"),
                             ScreenName = GetText(x, "screen_name"),
                         })
-                        .ToArray(),
-                    Urls = tweetLegacyElm.XPathSelectElements("entities/urls/item")
+                        .ToArray() ?? Array.Empty<TwitterEntityMention>(),
+                    Urls = (entitiesElm ?? tweetLegacyElm.Element("entities"))?.XPathSelectElements("urls/item")
                         .Select(x => new TwitterEntityUrl()
                         {
                             Indices = x.XPathSelectElements("indices/item").Select(x => int.Parse(x.Value)).ToArray(),
@@ -159,14 +168,14 @@ namespace OpenTween.Api.GraphQL
                             ExpandedUrl = GetTextOrNull(x, "expanded_url"),
                             Url = GetText(x, "url"),
                         })
-                        .ToArray(),
-                    Hashtags = tweetLegacyElm.XPathSelectElements("entities/hashtags/item")
+                        .ToArray() ?? Array.Empty<TwitterEntityUrl>(),
+                    Hashtags = (entitiesElm ?? tweetLegacyElm.Element("entities"))?.XPathSelectElements("hashtags/item")
                         .Select(x => new TwitterEntityHashtag()
                         {
                             Indices = x.XPathSelectElements("indices/item").Select(x => int.Parse(x.Value)).ToArray(),
                             Text = GetText(x, "text"),
                         })
-                        .ToArray(),
+                        .ToArray() ?? Array.Empty<TwitterEntityHashtag>(),
                 },
                 ExtendedEntities = new()
                 {
