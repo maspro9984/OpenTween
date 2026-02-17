@@ -442,20 +442,6 @@
 	<data name="SoundFileComboBox.ToolTipText"><value>Select a wav file.</value></data>
 	<data name="SourceRuleMenuItem.Size" type="System.Drawing.Size, System.Drawing"><value>122, 22</value></data>
 	<data name="SourceRuleMenuItem.Text"><value>&amp;Source</value></data>
-	<data name="SplitContainer1.Panel1.ToolTip"><value /></data>
-	<data name="SplitContainer1.Panel2.ToolTip"><value /></data>
-	<data name="SplitContainer1.Size" type="System.Drawing.Size, System.Drawing"><value>574, 327</value></data>
-	<data name="SplitContainer1.SplitterDistance" type="System.Int32, mscorlib"><value>153</value></data>
-	<data name="SplitContainer1.ToolTip"><value /></data>
-	<data name="SplitContainer2.Panel1.ToolTip"><value /></data>
-	<data name="SplitContainer2.Panel2.ToolTip"><value /></data>
-	<data name="SplitContainer2.Size" type="System.Drawing.Size, System.Drawing"><value>570, 168</value></data>
-	<data name="SplitContainer2.SplitterDistance" type="System.Int32, mscorlib"><value>141</value></data>
-	<data name="SplitContainer2.ToolTip"><value /></data>
-	<data name="SplitContainer3.Panel1.ToolTip"><value /></data>
-	<data name="SplitContainer3.Panel2.ToolTip"><value /></data>
-	<data name="SplitContainer3.Size" type="System.Drawing.Size, System.Drawing"><value>570, 168</value></data>
-	<data name="SplitContainer3.ToolTip"><value /></data>
 	<data name="StatusLabelUrl.Size" type="System.Drawing.Size, System.Drawing"><value>410, 23</value></data>
 	<data name="StatusOpenMenuItem.Size" type="System.Drawing.Size, System.Drawing"><value>245, 24</value></data>
 	<data name="StatusOpenMenuItem.Text"><value>&amp;Open Status</value></data>

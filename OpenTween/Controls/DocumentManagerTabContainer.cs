@@ -6,6 +6,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using DevExpress.XtraBars.Docking;
 using DevExpress.XtraBars.Docking2010;
 using DevExpress.XtraBars.Docking2010.Views;
 using DevExpress.XtraBars.Docking2010.Views.Tabbed;
@@ -17,6 +18,7 @@ namespace OpenTween.Controls
     {
         private readonly DocumentManager documentManager;
         private readonly TabbedView tabbedView;
+        private readonly DockManager dockManager;
 
         /// <summary>タブ名 → (Document, TimelineContentPanel) のマッピング</summary>
         private readonly Dictionary<string, (BaseDocument Document, TimelineContentPanel Content)> tabMap = new();
@@ -79,10 +81,13 @@ namespace OpenTween.Controls
 
             this.tabbedView.DocumentProperties.AllowClose = false;
             this.tabbedView.DocumentProperties.AllowFloat = true;
+            this.tabbedView.DocumentProperties.AllowDock = true;
+            this.tabbedView.DocumentProperties.AllowDockFill = true;
             this.tabbedView.DocumentProperties.AllowPin = false;
 
             this.tabbedView.EnableFreeLayoutMode = DevExpress.Utils.DefaultBoolean.True;
             this.tabbedView.EnableStickySplitters = DevExpress.Utils.DefaultBoolean.True;
+            this.tabbedView.FloatingDocumentContainer = FloatingDocumentContainer.DocumentsHost;
 
             this.tabbedView.DocumentGroupProperties.HeaderLocation = DevExpress.XtraTab.TabHeaderLocation.Top;
 
@@ -92,6 +97,9 @@ namespace OpenTween.Controls
             this.MouseUp += this.Container_MouseUp;
 
             this.documentManager.View = this.tabbedView;
+
+            this.dockManager = new DockManager();
+            this.dockManager.Form = this;
 
             this.KeyDown += (s, e) => this.TabKeyDown?.Invoke(this, e);
         }
@@ -127,6 +135,36 @@ namespace OpenTween.Controls
             doc.Caption = tabName;
             this.tabMap[tabName] = (doc, content);
             this.tabOrder.Add(tabName);
+        }
+
+        /// <summary>
+        /// 閉じることのできないツールパネル（DetailView等）を DockPanel として追加する。
+        /// DockPanel 同士はフローティング時にも相互ドッキング可能。
+        /// </summary>
+        private DockPanel? detailPanelContainer;
+
+        public void AddDetailPanel(string name, Control content)
+        {
+            content.Name = name;
+            content.Dock = DockStyle.Fill;
+
+            DockPanel panel;
+            if (this.detailPanelContainer == null)
+            {
+                // 最初のパネルはフォーム下部にドッキング
+                panel = this.dockManager.AddPanel(DockingStyle.Bottom);
+                this.detailPanelContainer = panel;
+            }
+            else
+            {
+                // 後続のパネルは既存パネルにタブとして追加
+                panel = this.detailPanelContainer.AddPanel();
+            }
+
+            panel.Text = name;
+            panel.Name = name;
+            panel.Options.ShowCloseButton = false;
+            panel.ControlContainer.Controls.Add(content);
         }
 
         public void RemoveTab(string tabName)
@@ -237,6 +275,10 @@ namespace OpenTween.Controls
             if (tabName == null)
                 return;
 
+            // DetailPanel など tabMap に存在しないドキュメントのアクティブ化は無視
+            if (!this.tabMap.ContainsKey(tabName))
+                return;
+
             var selectingArgs = new TabSelectingEventArgs(tabName);
             this.TabSelecting?.Invoke(this, selectingArgs);
             if (selectingArgs.Cancel)
@@ -251,6 +293,9 @@ namespace OpenTween.Controls
                 return;
 
             var prevTabName = e.Document?.Caption;
+            if (prevTabName != null && !this.tabMap.ContainsKey(prevTabName))
+                return;
+
             this.TabDeselected?.Invoke(this, new TabDeselectedEventArgs(prevTabName));
         }
 
@@ -278,9 +323,9 @@ namespace OpenTween.Controls
         {
             try
             {
+                // TabbedView レイアウト保存
                 if (this.tabbedView.DocumentGroups.Count <= 1)
                 {
-                    // グループが1つ以下ならレイアウトファイルを削除（デフォルト状態）
                     if (File.Exists(filePath))
                         File.Delete(filePath);
                     return;
@@ -317,6 +362,7 @@ namespace OpenTween.Controls
         {
             if (disposing)
             {
+                this.dockManager.Dispose();
                 this.documentManager.Dispose();
             }
 

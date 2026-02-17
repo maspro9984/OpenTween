@@ -76,14 +76,8 @@ namespace OpenTween
         /// <summary>画面位置</summary>
         private Point myLoc;
 
-        /// <summary>区切り位置</summary>
-        private int mySpDis;
-
         /// <summary>発言欄区切り位置</summary>
         private int mySpDis2;
-
-        /// <summary>プレビュー区切り位置</summary>
-        private int mySpDis3;
 
         // 雑多なフラグ類
         private bool initial; // true:起動時処理中
@@ -387,9 +381,7 @@ namespace OpenTween
                 this.DesktopLocation = this.myLoc;
             }
             this.TopMost = this.settings.Common.AlwaysTop;
-            this.mySpDis = ScaleBy(configScaleFactor.Height, this.settings.Local.SplitterDistance);
             this.mySpDis2 = ScaleBy(configScaleFactor.Height, this.settings.Local.StatusTextHeight);
-            this.mySpDis3 = ScaleBy(configScaleFactor.Width, this.settings.Local.PreviewDistance);
 
             this.PlaySoundMenuItem.Checked = this.settings.Common.PlaySound;
             this.PlaySoundFileMenuItem.Checked = this.settings.Common.PlaySound;
@@ -397,12 +389,7 @@ namespace OpenTween
             this.StatusText.Font = this.themeManager.FontInputFont;
             this.StatusText.ForeColor = this.themeManager.ColorInputFont;
 
-            // SplitContainer2.Panel2MinSize を一行表示の入力欄の高さに合わせる (MS UI Gothic 12pt (96dpi) の場合は 19px)
             this.StatusText.Multiline = false; // this.settings.Local.StatusMultiline の設定は後で反映される
-            this.SplitContainer2.Panel2MinSize = this.StatusText.Height;
-
-            // 必要であれば、発言一覧と発言詳細部・入力欄の上下を入れ替える
-            this.SplitContainer1.IsPanelInverted = !this.settings.Common.StatusAreaAtBottom;
 
             // 全新着通知のチェック状態により、Reply＆DMの新着通知有効無効切り替え（タブ別設定にするため削除予定）
             if (this.settings.Common.UnreadManage == false)
@@ -424,11 +411,6 @@ namespace OpenTween
             this.CopySTOTMenuItem.ShortcutKeyDisplayString = "Ctrl+C";
             this.CopyURLMenuItem.ShortcutKeyDisplayString = "Ctrl+Shift+C";
             this.CopyUserIdStripMenuItem.ShortcutKeyDisplayString = "Shift+Alt+C";
-
-            // SourceLinkLabel のテキストが SplitContainer2.Panel2.AccessibleName にセットされるのを防ぐ
-            // （タブオーダー順で SourceLinkLabel の次にある PostBrowser が TabStop = false となっているため、
-            // さらに次のコントロールである SplitContainer2.Panel2 の AccessibleName がデフォルトで SourceLinkLabel のテキストになってしまう)
-            this.SplitContainer2.Panel2.AccessibleName = "";
 
             ////////////////////////////////////////////////////////////////////////////////
             var sortOrder = (SortOrder)this.settings.Common.SortOrder;
@@ -459,6 +441,11 @@ namespace OpenTween
 
             // タブの位置を調整する
             this.SetTabAlignment();
+
+            // 各コントロールをドキュメントとして追加し、タイムラインタブと同じ DocumentManager 内に配置
+            this.ListTab.AddDetailPanel("DetailView", this.tweetDetailsView);
+            this.ListTab.AddDetailPanel("サムネイル", this.tweetThumbnail1);
+            this.ListTab.AddDetailPanel("投稿", this.TableLayoutPanel2);
 
             this.SubscribePrimaryAccountRatelimit();
 
@@ -1913,8 +1900,6 @@ namespace OpenTween
                 if (this.WindowState == FormWindowState.Normal)
                 {
                     this.mySize = this.ClientSize;
-                    this.mySpDis = this.SplitContainer1.SplitterDistance;
-                    this.mySpDis3 = this.SplitContainer3.SplitterDistance;
                     if (this.StatusText.Multiline) this.mySpDis2 = this.StatusText.Height;
                     this.MarkSettingLocalModified();
                 }
@@ -2387,8 +2372,6 @@ namespace OpenTween
                     // タブの表示位置の決定
                     this.SetTabAlignment();
 
-                    this.SplitContainer1.IsPanelInverted = !this.settings.Common.StatusAreaAtBottom;
-
                     var imgazyobizinet = this.thumbGenerator.ImgAzyobuziNet;
                     imgazyobizinet.Enabled = this.settings.Common.EnableImgAzyobuziNet;
                     imgazyobizinet.DisabledInDM = this.settings.Common.ImgAzyobuziNetDisabledInDM;
@@ -2701,9 +2684,6 @@ namespace OpenTween
             // ToDo:Create and set controls follow tabtypes
 
             using (ControlTransaction.Update(listCustom))
-            using (ControlTransaction.Layout(this.SplitContainer1.Panel1, false))
-            using (ControlTransaction.Layout(this.SplitContainer1.Panel2, false))
-            using (ControlTransaction.Layout(this.SplitContainer1, false))
             using (ControlTransaction.Layout(this.ListTab, false))
             using (ControlTransaction.Layout(this))
             {
@@ -2843,9 +2823,6 @@ namespace OpenTween
             // オブジェクトインスタンスの削除
             var listCustom = contentPanel.ListView;
 
-            using (ControlTransaction.Layout(this.SplitContainer1.Panel1, false))
-            using (ControlTransaction.Layout(this.SplitContainer1.Panel2, false))
-            using (ControlTransaction.Layout(this.SplitContainer1, false))
             using (ControlTransaction.Layout(this.ListTab, false))
             using (ControlTransaction.Layout(this))
             {
@@ -3773,10 +3750,7 @@ namespace OpenTween
                 var token = this.thumbnailTokenSource!.Token;
                 loadTasks.Add(() => this.PrepareThumbnailControl(currentPost, token));
             }
-            else
-            {
-                this.SplitContainer3.Panel2Collapsed = true;
-            }
+            // サムネイルが無い場合は何も表示しない（パネルは常時表示）
 
             // サムネイルの読み込みを待たずに次に選択されたツイートを表示するため await しない
             _ = loadTasks
@@ -3793,14 +3767,12 @@ namespace OpenTween
             {
                 token.ThrowIfCancellationRequested();
 
-                // サムネイル情報の読み込みに時間が掛かっている場合は一旦サムネイル領域を非表示にする
-                this.SplitContainer3.Panel2Collapsed = true;
+                // サムネイル情報の読み込みに時間が掛かっている場合でもパネルは常時表示
             }
 
             await prepareTask;
             token.ThrowIfCancellationRequested();
 
-            this.SplitContainer3.Panel2Collapsed = !this.tweetThumbnail1.Model.ThumbnailAvailable;
         }
 
         private async void MatomeMenuItem_Click(object sender, EventArgs e)
@@ -4414,7 +4386,7 @@ namespace OpenTween
 
                 ShortcutCommand.Create(Keys.Alt | Keys.Shift | Keys.Enter)
                     .FocusedOn(FocusedControl.ListTab)
-                    .OnlyWhen(() => !this.SplitContainer3.Panel2Collapsed)
+                    .OnlyWhen(() => this.tweetThumbnail1.Model.ThumbnailAvailable)
                     .Do(() => this.tweetThumbnail1.OpenImageInBrowser()),
             };
         }
@@ -5316,8 +5288,6 @@ namespace OpenTween
                 this.settings.Local.ScaleDimension = this.CurrentAutoScaleDimensions;
                 this.settings.Local.FormSize = this.mySize;
                 this.settings.Local.FormLocation = this.myLoc;
-                this.settings.Local.SplitterDistance = this.mySpDis;
-                this.settings.Local.PreviewDistance = this.mySpDis3;
                 this.settings.Local.StatusMultiline = this.StatusText.Multiline;
                 this.settings.Local.StatusTextHeight = this.mySpDis2;
 
@@ -6676,42 +6646,14 @@ namespace OpenTween
 
             this.ClientSize = ScaleBy(configScaleFactor, this.settings.Local.FormSize);
 
-            // Splitterの位置設定
-            var splitterDistance = ScaleBy(configScaleFactor.Height, this.settings.Local.SplitterDistance);
-            if (splitterDistance > this.SplitContainer1.Panel1MinSize &&
-                splitterDistance < this.SplitContainer1.Height - this.SplitContainer1.Panel2MinSize - this.SplitContainer1.SplitterWidth)
-            {
-                this.SplitContainer1.SplitterDistance = splitterDistance;
-            }
-
             // 発言欄複数行
             this.StatusText.Multiline = this.settings.Local.StatusMultiline;
             if (this.StatusText.Multiline)
             {
                 var statusTextHeight = ScaleBy(configScaleFactor.Height, this.settings.Local.StatusTextHeight);
-                var dis = this.SplitContainer2.Height - statusTextHeight - this.SplitContainer2.SplitterWidth;
-                if (dis > this.SplitContainer2.Panel1MinSize && dis < this.SplitContainer2.Height - this.SplitContainer2.Panel2MinSize - this.SplitContainer2.SplitterWidth)
-                {
-                    this.SplitContainer2.SplitterDistance = this.SplitContainer2.Height - statusTextHeight - this.SplitContainer2.SplitterWidth;
-                }
                 this.StatusText.Height = statusTextHeight;
             }
-            else
-            {
-                if (this.SplitContainer2.Height - this.SplitContainer2.Panel2MinSize - this.SplitContainer2.SplitterWidth > 0)
-                {
-                    this.SplitContainer2.SplitterDistance = this.SplitContainer2.Height - this.SplitContainer2.Panel2MinSize - this.SplitContainer2.SplitterWidth;
-                }
-            }
 
-            var previewDistance = ScaleBy(configScaleFactor.Width, this.settings.Local.PreviewDistance);
-            if (previewDistance > this.SplitContainer3.Panel1MinSize && previewDistance < this.SplitContainer3.Width - this.SplitContainer3.Panel2MinSize - this.SplitContainer3.SplitterWidth)
-            {
-                this.SplitContainer3.SplitterDistance = previewDistance;
-            }
-
-            // Panel2Collapsed は SplitterDistance の設定を終えるまで true にしない
-            this.SplitContainer3.Panel2Collapsed = true;
             this.initialLayout = false;
         }
 
@@ -6728,31 +6670,6 @@ namespace OpenTween
                 this.settings.Common.PlaySound = false;
             }
             this.MarkSettingCommonModified();
-        }
-
-        private void SplitContainer1_SplitterMoved(object sender, SplitterEventArgs e)
-        {
-            if (this.initialLayout)
-                return;
-
-            int splitterDistance;
-            switch (this.WindowState)
-            {
-                case FormWindowState.Normal:
-                    splitterDistance = this.SplitContainer1.SplitterDistance;
-                    break;
-                case FormWindowState.Maximized:
-                    // 最大化時は、通常時のウィンドウサイズに換算した SplitterDistance を算出する
-                    var normalContainerHeight = this.mySize.Height - this.ToolStripContainer1.TopToolStripPanel.Height - this.ToolStripContainer1.BottomToolStripPanel.Height;
-                    splitterDistance = this.SplitContainer1.SplitterDistance - (this.SplitContainer1.Height - normalContainerHeight);
-                    splitterDistance = Math.Min(splitterDistance, normalContainerHeight - this.SplitContainer1.SplitterWidth - this.SplitContainer1.Panel2MinSize);
-                    break;
-                default:
-                    return;
-            }
-
-            this.mySpDis = splitterDistance;
-            this.MarkSettingLocalModified();
         }
 
         private async Task DoRepliedStatusOpen()
@@ -6787,20 +6704,6 @@ namespace OpenTween
         private async void RepliedStatusOpenMenuItem_Click(object sender, EventArgs e)
             => await this.DoRepliedStatusOpen();
 
-        private void SplitContainer2_Panel2_Resize(object sender, EventArgs e)
-        {
-            if (this.initialLayout)
-                return; // SettingLocal の反映が完了するまで multiline の判定を行わない
-
-            var multiline = this.SplitContainer2.Panel2.Height > this.SplitContainer2.Panel2MinSize + 2;
-            if (multiline != this.StatusText.Multiline)
-            {
-                this.StatusText.Multiline = multiline;
-                this.settings.Local.StatusMultiline = multiline;
-                this.MarkSettingLocalModified();
-            }
-        }
-
         private void StatusText_MultilineChanged(object sender, EventArgs e)
         {
             if (this.StatusText.Multiline)
@@ -6820,14 +6723,7 @@ namespace OpenTween
             this.settings.Local.StatusMultiline = menuItemChecked;
             if (menuItemChecked)
             {
-                if (this.SplitContainer2.Height - this.mySpDis2 - this.SplitContainer2.SplitterWidth < 0)
-                    this.SplitContainer2.SplitterDistance = 0;
-                else
-                    this.SplitContainer2.SplitterDistance = this.SplitContainer2.Height - this.mySpDis2 - this.SplitContainer2.SplitterWidth;
-            }
-            else
-            {
-                this.SplitContainer2.SplitterDistance = this.SplitContainer2.Height - this.SplitContainer2.Panel2MinSize - this.SplitContainer2.SplitterWidth;
+                this.StatusText.Height = this.mySpDis2;
             }
             this.MarkSettingLocalModified();
         }
@@ -7155,12 +7051,6 @@ namespace OpenTween
                 this.MarkSettingLocalModified();
                 this.isColumnChanged = true;
             }
-        }
-
-        private void SplitContainer2_SplitterMoved(object sender, SplitterEventArgs e)
-        {
-            if (this.StatusText.Multiline) this.mySpDis2 = this.StatusText.Height;
-            this.MarkSettingLocalModified();
         }
 
         private void TweenMain_DragDrop(object sender, DragEventArgs e)
@@ -8375,31 +8265,6 @@ namespace OpenTween
         private void MenuItemTab_DropDownOpening(object sender, EventArgs e)
             => this.ContextMenuTabProperty_Opening(sender, null!);
 
-        private void SplitContainer3_SplitterMoved(object sender, SplitterEventArgs e)
-        {
-            if (this.initialLayout)
-                return;
-
-            int splitterDistance;
-            switch (this.WindowState)
-            {
-                case FormWindowState.Normal:
-                    splitterDistance = this.SplitContainer3.SplitterDistance;
-                    break;
-                case FormWindowState.Maximized:
-                    // 最大化時は、通常時のウィンドウサイズに換算した SplitterDistance を算出する
-                    var normalContainerWidth = this.mySize.Width - SystemInformation.Border3DSize.Width * 2;
-                    splitterDistance = this.SplitContainer3.SplitterDistance - (this.SplitContainer3.Width - normalContainerWidth);
-                    splitterDistance = Math.Min(splitterDistance, normalContainerWidth - this.SplitContainer3.SplitterWidth - this.SplitContainer3.Panel2MinSize);
-                    break;
-                default:
-                    return;
-            }
-
-            this.mySpDis3 = splitterDistance;
-            this.MarkSettingLocalModified();
-        }
-
         private void MenuItemEdit_DropDownOpening(object sender, EventArgs e)
         {
             this.UndoRemoveTabMenuItem.Enabled = this.statuses.CanUndoRemovedTab;
@@ -8572,9 +8437,6 @@ namespace OpenTween
                 this.StatusText.Focus();
             }
         }
-
-        private void SplitContainer2_MouseDoubleClick(object sender, MouseEventArgs e)
-            => this.MultiLinePullDownMenuItem.PerformClick();
 
 #region "画像投稿"
         private void ImageSelectMenuItem_Click(object sender, EventArgs e)

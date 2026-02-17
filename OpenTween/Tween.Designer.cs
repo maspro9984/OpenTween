@@ -35,7 +35,6 @@
             this.ToolStripSeparator8 = new System.Windows.Forms.ToolStripSeparator();
             this.HashTogglePullDownMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.HashManagePullDownMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.SplitContainer1 = new OpenTween.OTSplitContainer();
             this.TimelinePanel = new System.Windows.Forms.Panel();
             this.ListTab = new OpenTween.Controls.DocumentManagerTabContainer();
             this.ContextMenuTabProperty = new System.Windows.Forms.ContextMenuStrip(this.components);
@@ -55,8 +54,6 @@
             this.TabImage = new System.Windows.Forms.ImageList(this.components);
             this.ImageSelector = new OpenTween.MediaSelectorPanel();
             this.ProfilePanel = new System.Windows.Forms.Panel();
-            this.SplitContainer3 = new System.Windows.Forms.SplitContainer();
-            this.SplitContainer2 = new System.Windows.Forms.SplitContainer();
             this.tweetDetailsView = new OpenTween.TweetDetailsView();
             this.TableLayoutPanel2 = new System.Windows.Forms.TableLayoutPanel();
             this.StatusText = new System.Windows.Forms.TextBox();
@@ -274,20 +271,8 @@
             this.ToolStripContainer1.SuspendLayout();
             this.StatusStrip1.SuspendLayout();
             this.ContextMenuPostMode.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.SplitContainer1)).BeginInit();
-            this.SplitContainer1.Panel1.SuspendLayout();
-            this.SplitContainer1.Panel2.SuspendLayout();
-            this.SplitContainer1.SuspendLayout();
             this.TimelinePanel.SuspendLayout();
             this.ContextMenuTabProperty.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.SplitContainer3)).BeginInit();
-            this.SplitContainer3.Panel1.SuspendLayout();
-            this.SplitContainer3.Panel2.SuspendLayout();
-            this.SplitContainer3.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.SplitContainer2)).BeginInit();
-            this.SplitContainer2.Panel1.SuspendLayout();
-            this.SplitContainer2.Panel2.SuspendLayout();
-            this.SplitContainer2.SuspendLayout();
             this.TableLayoutPanel2.SuspendLayout();
             this.MenuStrip1.SuspendLayout();
             this.ContextMenuFile.SuspendLayout();
@@ -304,7 +289,9 @@
             // 
             // ToolStripContainer1.ContentPanel
             // 
-            this.ToolStripContainer1.ContentPanel.Controls.Add(this.SplitContainer1);
+            this.ToolStripContainer1.ContentPanel.Controls.Add(this.TimelinePanel);
+            this.ToolStripContainer1.ContentPanel.Controls.Add(this.ImageSelector);
+            this.ToolStripContainer1.ContentPanel.Controls.Add(this.ProfilePanel);
             resources.ApplyResources(this.ToolStripContainer1.ContentPanel, "ToolStripContainer1.ContentPanel");
             resources.ApplyResources(this.ToolStripContainer1, "ToolStripContainer1");
             this.ToolStripContainer1.LeftToolStripPanelVisible = false;
@@ -456,26 +443,7 @@
             this.HashManagePullDownMenuItem.Name = "HashManagePullDownMenuItem";
             resources.ApplyResources(this.HashManagePullDownMenuItem, "HashManagePullDownMenuItem");
             this.HashManagePullDownMenuItem.Click += new System.EventHandler(this.HashManageMenuItem_Click);
-            // 
-            // SplitContainer1
-            // 
-            this.SplitContainer1.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
-            resources.ApplyResources(this.SplitContainer1, "SplitContainer1");
-            this.SplitContainer1.FixedPanel = System.Windows.Forms.FixedPanel.Panel2;
-            this.SplitContainer1.Name = "SplitContainer1";
-            // 
-            // SplitContainer1.Panel1
-            // 
-            this.SplitContainer1.Panel1.Controls.Add(this.TimelinePanel);
-            this.SplitContainer1.Panel1.Controls.Add(this.ImageSelector);
-            this.SplitContainer1.Panel1.Controls.Add(this.ProfilePanel);
-            // 
-            // SplitContainer1.Panel2
-            // 
-            this.SplitContainer1.Panel2.Controls.Add(this.SplitContainer3);
-            this.SplitContainer1.TabStop = false;
-            this.SplitContainer1.SplitterMoved += new System.Windows.Forms.SplitterEventHandler(this.SplitContainer1_SplitterMoved);
-            // 
+            //
             // TimelinePanel
             // 
             this.TimelinePanel.Controls.Add(this.ListTab);
@@ -613,41 +581,7 @@
             // 
             resources.ApplyResources(this.ProfilePanel, "ProfilePanel");
             this.ProfilePanel.Name = "ProfilePanel";
-            // 
-            // SplitContainer3
-            // 
-            resources.ApplyResources(this.SplitContainer3, "SplitContainer3");
-            this.SplitContainer3.FixedPanel = System.Windows.Forms.FixedPanel.Panel2;
-            this.SplitContainer3.Name = "SplitContainer3";
-            // 
-            // SplitContainer3.Panel1
-            // 
-            this.SplitContainer3.Panel1.Controls.Add(this.SplitContainer2);
-            // 
-            // SplitContainer3.Panel2
-            // 
-            this.SplitContainer3.Panel2.Controls.Add(this.tweetThumbnail1);
-            this.SplitContainer3.TabStop = false;
-            this.SplitContainer3.SplitterMoved += new System.Windows.Forms.SplitterEventHandler(this.SplitContainer3_SplitterMoved);
-            // 
-            // SplitContainer2
-            // 
-            resources.ApplyResources(this.SplitContainer2, "SplitContainer2");
-            this.SplitContainer2.FixedPanel = System.Windows.Forms.FixedPanel.Panel2;
-            this.SplitContainer2.Name = "SplitContainer2";
-            // 
-            // SplitContainer2.Panel1
-            // 
-            this.SplitContainer2.Panel1.Controls.Add(this.tweetDetailsView);
-            // 
-            // SplitContainer2.Panel2
-            // 
-            this.SplitContainer2.Panel2.Controls.Add(this.TableLayoutPanel2);
-            this.SplitContainer2.Panel2.Resize += new System.EventHandler(this.SplitContainer2_Panel2_Resize);
-            this.SplitContainer2.TabStop = false;
-            this.SplitContainer2.SplitterMoved += new System.Windows.Forms.SplitterEventHandler(this.SplitContainer2_SplitterMoved);
-            this.SplitContainer2.MouseDoubleClick += new System.Windows.Forms.MouseEventHandler(this.SplitContainer2_MouseDoubleClick);
-            // 
+            //
             // tweetDetailsView
             // 
             resources.ApplyResources(this.tweetDetailsView, "tweetDetailsView");
@@ -2140,20 +2074,8 @@
             this.StatusStrip1.ResumeLayout(false);
             this.StatusStrip1.PerformLayout();
             this.ContextMenuPostMode.ResumeLayout(false);
-            this.SplitContainer1.Panel1.ResumeLayout(false);
-            this.SplitContainer1.Panel2.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)(this.SplitContainer1)).EndInit();
-            this.SplitContainer1.ResumeLayout(false);
             this.TimelinePanel.ResumeLayout(false);
             this.ContextMenuTabProperty.ResumeLayout(false);
-            this.SplitContainer3.Panel1.ResumeLayout(false);
-            this.SplitContainer3.Panel2.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)(this.SplitContainer3)).EndInit();
-            this.SplitContainer3.ResumeLayout(false);
-            this.SplitContainer2.Panel1.ResumeLayout(false);
-            this.SplitContainer2.Panel2.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)(this.SplitContainer2)).EndInit();
-            this.SplitContainer2.ResumeLayout(false);
             this.TableLayoutPanel2.ResumeLayout(false);
             this.TableLayoutPanel2.PerformLayout();
             this.MenuStrip1.ResumeLayout(false);
@@ -2185,7 +2107,6 @@
         internal System.Windows.Forms.ToolStripSeparator ToolStripSeparator8;
         internal System.Windows.Forms.ToolStripMenuItem HashTogglePullDownMenuItem;
         internal System.Windows.Forms.ToolStripMenuItem HashManagePullDownMenuItem;
-        internal OTSplitContainer SplitContainer1;
         internal System.Windows.Forms.Panel TimelinePanel;
         internal OpenTween.Controls.DocumentManagerTabContainer ListTab;
         internal System.Windows.Forms.ContextMenuStrip ContextMenuTabProperty;
@@ -2204,8 +2125,6 @@
         internal System.Windows.Forms.ImageList TabImage;
         internal MediaSelectorPanel ImageSelector;
         internal System.Windows.Forms.Panel ProfilePanel;
-        internal System.Windows.Forms.SplitContainer SplitContainer3;
-        internal System.Windows.Forms.SplitContainer SplitContainer2;
         internal System.Windows.Forms.TextBox StatusText;
         internal System.Windows.Forms.Label lblLen;
         internal System.Windows.Forms.Button PostButton;

@@ -155,7 +155,7 @@
 	<data name="&gt;&gt;ImageSelectMenuItem.Name"><value>ImageSelectMenuItem</value></data>
 	<data name="&gt;&gt;ImageSelectMenuItem.Type"><value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
 	<data name="&gt;&gt;ImageSelector.Name"><value>ImageSelector</value></data>
-	<data name="&gt;&gt;ImageSelector.Parent"><value>SplitContainer1.Panel1</value></data>
+	<data name="&gt;&gt;ImageSelector.Parent"><value>ToolStripContainer1.ContentPanel</value></data>
 	<data name="&gt;&gt;ImageSelector.Type"><value>OpenTween.MediaSelectorPanel, OpenTween, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null</value></data>
 	<data name="&gt;&gt;ImageSelector.ZOrder"><value>1</value></data>
 	<data name="&gt;&gt;ImageSelectPullDownMenuItem.Name"><value>ImageSelectPullDownMenuItem</value></data>
@@ -259,7 +259,7 @@
 	<data name="&gt;&gt;PreventSmsCommandPullDownMenuItem.Name"><value>PreventSmsCommandPullDownMenuItem</value></data>
 	<data name="&gt;&gt;PreventSmsCommandPullDownMenuItem.Type"><value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
 	<data name="&gt;&gt;ProfilePanel.Name"><value>ProfilePanel</value></data>
-	<data name="&gt;&gt;ProfilePanel.Parent"><value>SplitContainer1.Panel1</value></data>
+	<data name="&gt;&gt;ProfilePanel.Parent"><value>ToolStripContainer1.ContentPanel</value></data>
 	<data name="&gt;&gt;ProfilePanel.Type"><value>System.Windows.Forms.Panel, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
 	<data name="&gt;&gt;ProfilePanel.ZOrder"><value>2</value></data>
 	<data name="&gt;&gt;ProtectTabMenuItem.Name"><value>ProtectTabMenuItem</value></data>
@@ -362,42 +362,6 @@
 	<data name="&gt;&gt;SoundFileTbComboBox.Type"><value>System.Windows.Forms.ToolStripComboBox, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
 	<data name="&gt;&gt;SourceRuleMenuItem.Name"><value>SourceRuleMenuItem</value></data>
 	<data name="&gt;&gt;SourceRuleMenuItem.Type"><value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
-	<data name="&gt;&gt;SplitContainer1.Name"><value>SplitContainer1</value></data>
-	<data name="&gt;&gt;SplitContainer1.Panel1.Name"><value>SplitContainer1.Panel1</value></data>
-	<data name="&gt;&gt;SplitContainer1.Panel1.Parent"><value>SplitContainer1</value></data>
-	<data name="&gt;&gt;SplitContainer1.Panel1.Type"><value>System.Windows.Forms.SplitterPanel, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
-	<data name="&gt;&gt;SplitContainer1.Panel1.ZOrder"><value>0</value></data>
-	<data name="&gt;&gt;SplitContainer1.Panel2.Name"><value>SplitContainer1.Panel2</value></data>
-	<data name="&gt;&gt;SplitContainer1.Panel2.Parent"><value>SplitContainer1</value></data>
-	<data name="&gt;&gt;SplitContainer1.Panel2.Type"><value>System.Windows.Forms.SplitterPanel, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
-	<data name="&gt;&gt;SplitContainer1.Panel2.ZOrder"><value>1</value></data>
-	<data name="&gt;&gt;SplitContainer1.Parent"><value>ToolStripContainer1.ContentPanel</value></data>
-	<data name="&gt;&gt;SplitContainer1.Type"><value>OpenTween.OTSplitContainer, OpenTween, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null</value></data>
-	<data name="&gt;&gt;SplitContainer1.ZOrder"><value>0</value></data>
-	<data name="&gt;&gt;SplitContainer2.Name"><value>SplitContainer2</value></data>
-	<data name="&gt;&gt;SplitContainer2.Panel1.Name"><value>SplitContainer2.Panel1</value></data>
-	<data name="&gt;&gt;SplitContainer2.Panel1.Parent"><value>SplitContainer2</value></data>
-	<data name="&gt;&gt;SplitContainer2.Panel1.Type"><value>System.Windows.Forms.SplitterPanel, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
-	<data name="&gt;&gt;SplitContainer2.Panel1.ZOrder"><value>0</value></data>
-	<data name="&gt;&gt;SplitContainer2.Panel2.Name"><value>SplitContainer2.Panel2</value></data>
-	<data name="&gt;&gt;SplitContainer2.Panel2.Parent"><value>SplitContainer2</value></data>
-	<data name="&gt;&gt;SplitContainer2.Panel2.Type"><value>System.Windows.Forms.SplitterPanel, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
-	<data name="&gt;&gt;SplitContainer2.Panel2.ZOrder"><value>1</value></data>
-	<data name="&gt;&gt;SplitContainer2.Parent"><value>SplitContainer3.Panel1</value></data>
-	<data name="&gt;&gt;SplitContainer2.Type"><value>System.Windows.Forms.SplitContainer, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
-	<data name="&gt;&gt;SplitContainer2.ZOrder"><value>0</value></data>
-	<data name="&gt;&gt;SplitContainer3.Name"><value>SplitContainer3</value></data>
-	<data name="&gt;&gt;SplitContainer3.Panel1.Name"><value>SplitContainer3.Panel1</value></data>
-	<data name="&gt;&gt;SplitContainer3.Panel1.Parent"><value>SplitContainer3</value></data>
-	<data name="&gt;&gt;SplitContainer3.Panel1.Type"><value>System.Windows.Forms.SplitterPanel, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
-	<data name="&gt;&gt;SplitContainer3.Panel1.ZOrder"><value>0</value></data>
-	<data name="&gt;&gt;SplitContainer3.Panel2.Name"><value>SplitContainer3.Panel2</value></data>
-	<data name="&gt;&gt;SplitContainer3.Panel2.Parent"><value>SplitContainer3</value></data>
-	<data name="&gt;&gt;SplitContainer3.Panel2.Type"><value>System.Windows.Forms.SplitterPanel, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
-	<data name="&gt;&gt;SplitContainer3.Panel2.ZOrder"><value>1</value></data>
-	<data name="&gt;&gt;SplitContainer3.Parent"><value>SplitContainer1.Panel2</value></data>
-	<data name="&gt;&gt;SplitContainer3.Type"><value>System.Windows.Forms.SplitContainer, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
-	<data name="&gt;&gt;SplitContainer3.ZOrder"><value>0</value></data>
 	<data name="&gt;&gt;StatusLabel.Name"><value>StatusLabel</value></data>
 	<data name="&gt;&gt;StatusLabel.Type"><value>OpenTween.OpenTweenCustomControl.ToolStripLabelHistory, OpenTween, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null</value></data>
 	<data name="&gt;&gt;StatusLabelUrl.Name"><value>StatusLabelUrl</value></data>
@@ -417,7 +381,7 @@
 	<data name="&gt;&gt;TabImage.Name"><value>TabImage</value></data>
 	<data name="&gt;&gt;TabImage.Type"><value>System.Windows.Forms.ImageList, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
 	<data name="&gt;&gt;TableLayoutPanel2.Name"><value>TableLayoutPanel2</value></data>
-	<data name="&gt;&gt;TableLayoutPanel2.Parent"><value>SplitContainer2.Panel2</value></data>
+	<data name="&gt;&gt;TableLayoutPanel2.Parent"><value>$this</value></data>
 	<data name="&gt;&gt;TableLayoutPanel2.Type"><value>System.Windows.Forms.TableLayoutPanel, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
 	<data name="&gt;&gt;TableLayoutPanel2.ZOrder"><value>0</value></data>
 	<data name="&gt;&gt;TabMenuItem.Name"><value>TabMenuItem</value></data>
@@ -425,7 +389,7 @@
 	<data name="&gt;&gt;TabRenameMenuItem.Name"><value>TabRenameMenuItem</value></data>
 	<data name="&gt;&gt;TabRenameMenuItem.Type"><value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
 	<data name="&gt;&gt;TimelinePanel.Name"><value>TimelinePanel</value></data>
-	<data name="&gt;&gt;TimelinePanel.Parent"><value>SplitContainer1.Panel1</value></data>
+	<data name="&gt;&gt;TimelinePanel.Parent"><value>ToolStripContainer1.ContentPanel</value></data>
 	<data name="&gt;&gt;TimelinePanel.Type"><value>System.Windows.Forms.Panel, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
 	<data name="&gt;&gt;TimelinePanel.ZOrder"><value>0</value></data>
 	<data name="&gt;&gt;TimerRefreshIcon.Name"><value>TimerRefreshIcon</value></data>
@@ -551,11 +515,11 @@
 	<data name="&gt;&gt;TweenRestartMenuItem.Name"><value>TweenRestartMenuItem</value></data>
 	<data name="&gt;&gt;TweenRestartMenuItem.Type"><value>System.Windows.Forms.ToolStripMenuItem, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></data>
 	<data name="&gt;&gt;tweetDetailsView.Name"><value>tweetDetailsView</value></data>
-	<data name="&gt;&gt;tweetDetailsView.Parent"><value>SplitContainer2.Panel1</value></data>
+	<data name="&gt;&gt;tweetDetailsView.Parent"><value>$this</value></data>
 	<data name="&gt;&gt;tweetDetailsView.Type"><value>OpenTween.TweetDetailsView, OpenTween, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null</value></data>
 	<data name="&gt;&gt;tweetDetailsView.ZOrder"><value>0</value></data>
 	<data name="&gt;&gt;tweetThumbnail1.Name"><value>tweetThumbnail1</value></data>
-	<data name="&gt;&gt;tweetThumbnail1.Parent"><value>SplitContainer3.Panel2</value></data>
+	<data name="&gt;&gt;tweetThumbnail1.Parent"><value>$this</value></data>
 	<data name="&gt;&gt;tweetThumbnail1.Type"><value>OpenTween.TweetThumbnailControl, OpenTween, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null</value></data>
 	<data name="&gt;&gt;tweetThumbnail1.ZOrder"><value>0</value></data>
 	<data name="&gt;&gt;TwitterApiStatusToolStripMenuItem.Name"><value>TwitterApiStatusToolStripMenuItem</value></data>
@@ -988,27 +952,6 @@
 	<data name="SoundFileTbComboBox.Size" type="System.Drawing.Size, System.Drawing"><value>121, 23</value></data>
 	<data name="SourceRuleMenuItem.Size" type="System.Drawing.Size, System.Drawing"><value>222, 22</value></data>
 	<data name="SourceRuleMenuItem.Text"><value>&amp;Source振り分けルール作成...</value></data>
-	<data name="SplitContainer1.Dock" type="System.Windows.Forms.DockStyle, System.Windows.Forms"><value>Fill</value></data>
-	<data name="SplitContainer1.Location" type="System.Drawing.Point, System.Drawing"><value>0, 0</value></data>
-	<data name="SplitContainer1.Orientation" type="System.Windows.Forms.Orientation, System.Windows.Forms"><value>Horizontal</value></data>
-	<data name="SplitContainer1.Panel2MinSize" type="System.Int32, mscorlib"><value>23</value></data>
-	<data name="SplitContainer1.Size" type="System.Drawing.Size, System.Drawing"><value>612, 404</value></data>
-	<data name="SplitContainer1.SplitterDistance" type="System.Int32, mscorlib"><value>284</value></data>
-	<data name="SplitContainer1.SplitterWidth" type="System.Int32, mscorlib"><value>2</value></data>
-	<data name="SplitContainer1.TabIndex" type="System.Int32, mscorlib"><value>0</value></data>
-	<data name="SplitContainer2.Dock" type="System.Windows.Forms.DockStyle, System.Windows.Forms"><value>Fill</value></data>
-	<data name="SplitContainer2.Location" type="System.Drawing.Point, System.Drawing"><value>0, 0</value></data>
-	<data name="SplitContainer2.Orientation" type="System.Windows.Forms.Orientation, System.Windows.Forms"><value>Horizontal</value></data>
-	<data name="SplitContainer2.Panel1MinSize" type="System.Int32, mscorlib"><value>0</value></data>
-	<data name="SplitContainer2.Size" type="System.Drawing.Size, System.Drawing"><value>511, 114</value></data>
-	<data name="SplitContainer2.SplitterDistance" type="System.Int32, mscorlib"><value>87</value></data>
-	<data name="SplitContainer2.SplitterWidth" type="System.Int32, mscorlib"><value>2</value></data>
-	<data name="SplitContainer2.TabIndex" type="System.Int32, mscorlib"><value>1</value></data>
-	<data name="SplitContainer3.Dock" type="System.Windows.Forms.DockStyle, System.Windows.Forms"><value>Fill</value></data>
-	<data name="SplitContainer3.Location" type="System.Drawing.Point, System.Drawing"><value>0, 0</value></data>
-	<data name="SplitContainer3.Size" type="System.Drawing.Size, System.Drawing"><value>608, 114</value></data>
-	<data name="SplitContainer3.SplitterDistance" type="System.Int32, mscorlib"><value>511</value></data>
-	<data name="SplitContainer3.TabIndex" type="System.Int32, mscorlib"><value>2</value></data>
 	<data name="StatusLabel.Size" type="System.Drawing.Size, System.Drawing"><value>70, 23</value></data>
 	<data name="StatusLabel.Text"><value>Starting...</value></data>
 	<data name="StatusLabel.ToolTipText"><value>Starting...</value></data>
