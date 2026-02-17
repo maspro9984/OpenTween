@@ -76,9 +76,6 @@ namespace OpenTween
         /// <summary>画面位置</summary>
         private Point myLoc;
 
-        /// <summary>発言欄区切り位置</summary>
-        private int mySpDis2;
-
         // 雑多なフラグ類
         private bool initial; // true:起動時処理中
         private bool initialLayout = true;
@@ -381,15 +378,15 @@ namespace OpenTween
                 this.DesktopLocation = this.myLoc;
             }
             this.TopMost = this.settings.Common.AlwaysTop;
-            this.mySpDis2 = ScaleBy(configScaleFactor.Height, this.settings.Local.StatusTextHeight);
-
             this.PlaySoundMenuItem.Checked = this.settings.Common.PlaySound;
             this.PlaySoundFileMenuItem.Checked = this.settings.Common.PlaySound;
             // 入力欄
             this.StatusText.Font = this.themeManager.FontInputFont;
             this.StatusText.ForeColor = this.themeManager.ColorInputFont;
 
-            this.StatusText.Multiline = false; // this.settings.Local.StatusMultiline の設定は後で反映される
+            this.StatusText.Multiline = true;
+            this.StatusText.ScrollBars = ScrollBars.Vertical;
+            this.StatusText.ImeMode = ImeMode.On;
 
             // 全新着通知のチェック状態により、Reply＆DMの新着通知有効無効切り替え（タブ別設定にするため削除予定）
             if (this.settings.Common.UnreadManage == false)
@@ -1900,7 +1897,6 @@ namespace OpenTween
                 if (this.WindowState == FormWindowState.Normal)
                 {
                     this.mySize = this.ClientSize;
-                    if (this.StatusText.Multiline) this.mySpDis2 = this.StatusText.Height;
                     this.MarkSettingLocalModified();
                 }
             }
@@ -3137,7 +3133,7 @@ namespace OpenTween
             }
             else
             {
-                if (this.settings.Local.StatusMultiline && !this.settings.Common.PostCtrlEnter)
+                if (!this.settings.Common.PostCtrlEnter)
                     disableFooter = MyCommon.IsKeyDown(modifierKeys, Keys.Control);
                 else
                     disableFooter = MyCommon.IsKeyDown(modifierKeys, Keys.Shift);
@@ -3995,10 +3991,6 @@ namespace OpenTween
                 ShortcutCommand.Create(Keys.Control | Keys.L)
                     .Do(() => this.UrlConvertAutoToolStripMenuItem_Click(this.UrlConvertAutoToolStripMenuItem, EventArgs.Empty)),
 
-                ShortcutCommand.Create(Keys.Control | Keys.Y)
-                    .NotFocusedOn(FocusedControl.PostBrowser)
-                    .Do(() => this.MultiLineMenuItem_Click(this.MultiLineMenuItem, EventArgs.Empty)),
-
                 ShortcutCommand.Create(Keys.Control | Keys.F)
                     .Do(() => this.MenuItemSubSearch_Click(this.MenuItemSubSearch, EventArgs.Empty)),
 
@@ -4121,15 +4113,7 @@ namespace OpenTween
                         this.StatusText.Focus();
                     }),
 
-                ShortcutCommand.Create(Keys.Control | Keys.Y)
-                    .FocusedOn(FocusedControl.PostBrowser)
-                    .Do(() =>
-                    {
-                        var multiline = !this.settings.Local.StatusMultiline;
-                        this.settings.Local.StatusMultiline = multiline;
-                        this.MultiLineMenuItem.Checked = multiline;
-                        this.MultiLineMenuItem_Click(this.MultiLineMenuItem, EventArgs.Empty);
-                    }),
+                // Ctrl+Y: 複数行トグルは DockPanel 化により常時複数行のため無効化
 
                 ShortcutCommand.Create(Keys.Shift | Keys.F3)
                     .Do(() => this.MenuItemSearchPrev_Click(this.MenuItemSearchPrev, EventArgs.Empty)),
@@ -5288,8 +5272,7 @@ namespace OpenTween
                 this.settings.Local.ScaleDimension = this.CurrentAutoScaleDimensions;
                 this.settings.Local.FormSize = this.mySize;
                 this.settings.Local.FormLocation = this.myLoc;
-                this.settings.Local.StatusMultiline = this.StatusText.Multiline;
-                this.settings.Local.StatusTextHeight = this.mySpDis2;
+                this.settings.Local.StatusMultiline = true;
 
                 if (this.ignoreConfigSave) return;
                 this.settings.SaveLocal();
@@ -6646,13 +6629,8 @@ namespace OpenTween
 
             this.ClientSize = ScaleBy(configScaleFactor, this.settings.Local.FormSize);
 
-            // 発言欄複数行
-            this.StatusText.Multiline = this.settings.Local.StatusMultiline;
-            if (this.StatusText.Multiline)
-            {
-                var statusTextHeight = ScaleBy(configScaleFactor.Height, this.settings.Local.StatusTextHeight);
-                this.StatusText.Height = statusTextHeight;
-            }
+            // 発言欄は DockPanel 内で Dock=Fill のため常に複数行
+            this.StatusText.Multiline = true;
 
             this.initialLayout = false;
         }
@@ -6717,15 +6695,7 @@ namespace OpenTween
 
         private void MultiLineMenuItem_Click(object sender, EventArgs e)
         {
-            // 発言欄複数行
-            var menuItemChecked = ((ToolStripMenuItem)sender).Checked;
-            this.StatusText.Multiline = menuItemChecked;
-            this.settings.Local.StatusMultiline = menuItemChecked;
-            if (menuItemChecked)
-            {
-                this.StatusText.Height = this.mySpDis2;
-            }
-            this.MarkSettingLocalModified();
+            // DockPanel 内で Dock=Fill のため常に複数行（トグル無効化）
         }
 
         private async Task<bool> UrlConvertAsync(MyCommon.UrlConverter converterType)
@@ -7577,7 +7547,7 @@ namespace OpenTween
             this.PreventSmsCommandMenuItem.Checked = this.preventSmsCommand;
             this.UrlAutoShortenMenuItem.Checked = this.settings.Common.UrlConvertAuto;
             this.IdeographicSpaceToSpaceMenuItem.Checked = this.settings.Common.WideSpaceConvert;
-            this.MultiLineMenuItem.Checked = this.settings.Local.StatusMultiline;
+            this.MultiLineMenuItem.Checked = true;
             this.FocusLockMenuItem.Checked = this.settings.Common.FocusLockToStatusText;
         }
 
@@ -7587,7 +7557,7 @@ namespace OpenTween
             this.PreventSmsCommandPullDownMenuItem.Checked = this.preventSmsCommand;
             this.UrlAutoShortenPullDownMenuItem.Checked = this.settings.Common.UrlConvertAuto;
             this.IdeographicSpaceToSpacePullDownMenuItem.Checked = this.settings.Common.WideSpaceConvert;
-            this.MultiLinePullDownMenuItem.Checked = this.settings.Local.StatusMultiline;
+            this.MultiLinePullDownMenuItem.Checked = true;
             this.FocusLockPullDownMenuItem.Checked = this.settings.Common.FocusLockToStatusText;
         }
 
