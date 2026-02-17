@@ -26,6 +26,9 @@ namespace OpenTween.Controls
         /// <summary>タブの順序を管理するリスト</summary>
         private readonly List<string> tabOrder = new();
 
+        /// <summary>DockPanel 名 → コンテンツコントロール（レイアウト復元後の再配置用）</summary>
+        private readonly Dictionary<string, Control> detailPanelContents = new();
+
         private bool suppressEvents;
 
         public ContextMenuStrip? TabContextMenuStrip { get; set; }
@@ -165,6 +168,8 @@ namespace OpenTween.Controls
             panel.Name = name;
             panel.Options.ShowCloseButton = false;
             panel.ControlContainer.Controls.Add(content);
+
+            this.detailPanelContents[name] = content;
         }
 
         public void RemoveTab(string tabName)
@@ -328,10 +333,15 @@ namespace OpenTween.Controls
                 {
                     if (File.Exists(filePath))
                         File.Delete(filePath);
-                    return;
+                }
+                else
+                {
+                    this.tabbedView.SaveLayoutToXml(filePath);
                 }
 
-                this.tabbedView.SaveLayoutToXml(filePath);
+                // DockManager レイアウト保存
+                var dockLayoutPath = filePath + ".dock";
+                this.dockManager.SaveLayoutToXml(dockLayoutPath);
             }
             catch (Exception)
             {
@@ -340,13 +350,21 @@ namespace OpenTween.Controls
 
         public void RestoreLayout(string filePath)
         {
-            if (!File.Exists(filePath))
-                return;
-
             try
             {
                 this.suppressEvents = true;
-                this.tabbedView.RestoreLayoutFromXml(filePath);
+
+                // TabbedView レイアウト復元
+                if (File.Exists(filePath))
+                    this.tabbedView.RestoreLayoutFromXml(filePath);
+
+                // DockManager レイアウト復元
+                var dockLayoutPath = filePath + ".dock";
+                if (File.Exists(dockLayoutPath))
+                {
+                    this.dockManager.RestoreLayoutFromXml(dockLayoutPath);
+                    this.ReattachDetailPanelContents();
+                }
             }
             catch (Exception)
             {
@@ -356,6 +374,53 @@ namespace OpenTween.Controls
             {
                 this.suppressEvents = false;
             }
+        }
+
+        /// <summary>
+        /// DockManager のレイアウト復元後、復元されたパネルにコンテンツコントロールを再配置する
+        /// </summary>
+        private void ReattachDetailPanelContents()
+        {
+            // Panels と Name で直接マッチ
+            foreach (DockPanel panel in this.dockManager.Panels)
+            {
+                this.TryReattachContent(panel);
+            }
+
+            // マッチしなかったコンテンツがある場合、RootPanels の子パネルも再帰探索
+            foreach (DockPanel rootPanel in this.dockManager.RootPanels)
+            {
+                this.ReattachContentRecursive(rootPanel);
+            }
+        }
+
+        private void ReattachContentRecursive(DockPanel panel)
+        {
+            this.TryReattachContent(panel);
+
+            for (var i = 0; i < panel.Count; i++)
+                this.ReattachContentRecursive(panel[i]);
+        }
+
+        private void TryReattachContent(DockPanel panel)
+        {
+            if (panel.ControlContainer == null)
+                return;
+
+            // Name または Text でマッチ
+            var name = panel.Name;
+            if (!this.detailPanelContents.TryGetValue(name, out var content))
+            {
+                if (!this.detailPanelContents.TryGetValue(panel.Text, out content))
+                    return;
+            }
+
+            // 既に配置済みなら再配置しない
+            if (content.Parent == panel.ControlContainer)
+                return;
+
+            content.Dock = DockStyle.Fill;
+            panel.ControlContainer.Controls.Add(content);
         }
 
         protected override void Dispose(bool disposing)
