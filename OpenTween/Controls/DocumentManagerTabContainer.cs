@@ -363,6 +363,10 @@ namespace OpenTween.Controls
                 var dockLayoutPath = filePath + ".dock";
                 if (File.Exists(dockLayoutPath))
                 {
+                    // コンテンツコントロールを退避（RestoreLayoutFromXml がパネルを
+                    // 再生成する際にコントロールが破棄されるのを防止する）
+                    this.DetachDetailPanelContents();
+
                     this.dockManager.RestoreLayoutFromXml(dockLayoutPath);
                     this.ReattachDetailPanelContents();
                 }
@@ -378,51 +382,95 @@ namespace OpenTween.Controls
         }
 
         /// <summary>
+        /// DockManager のレイアウト復元前にコンテンツコントロールをパネルから退避する。
+        /// RestoreLayoutFromXml はパネルを再生成するため、退避しないとコントロールが破棄される。
+        /// </summary>
+        private void DetachDetailPanelContents()
+        {
+            foreach (var content in this.detailPanelContents.Values)
+            {
+                content.Parent?.Controls.Remove(content);
+            }
+        }
+
+        /// <summary>
         /// DockManager のレイアウト復元後、復元されたパネルにコンテンツコントロールを再配置する
         /// </summary>
         private void ReattachDetailPanelContents()
         {
+            var attached = new HashSet<string>();
+
             // Panels と Name で直接マッチ
             foreach (DockPanel panel in this.dockManager.Panels)
             {
-                this.TryReattachContent(panel);
+                if (this.TryReattachContent(panel, out var matchedName) && matchedName != null)
+                    attached.Add(matchedName);
             }
 
             // マッチしなかったコンテンツがある場合、RootPanels の子パネルも再帰探索
             foreach (DockPanel rootPanel in this.dockManager.RootPanels)
             {
-                this.ReattachContentRecursive(rootPanel);
+                this.ReattachContentRecursive(rootPanel, attached);
+            }
+
+            // レイアウト復元後にマッチしなかったコンテンツがあれば、新しいパネルを作成して配置
+            foreach (var kvp in this.detailPanelContents)
+            {
+                if (attached.Contains(kvp.Key))
+                    continue;
+
+                // コンテンツが既にどこかに配置済みならスキップ
+                if (kvp.Value.Parent != null)
+                    continue;
+
+                var panel = this.dockManager.AddPanel(DockingStyle.Bottom);
+                panel.Text = kvp.Key;
+                panel.Name = kvp.Key;
+                panel.Options.ShowCloseButton = false;
+                panel.ControlContainer.ImeMode = System.Windows.Forms.ImeMode.Inherit;
+                kvp.Value.Dock = DockStyle.Fill;
+                panel.ControlContainer.Controls.Add(kvp.Value);
+                attached.Add(kvp.Key);
             }
         }
 
-        private void ReattachContentRecursive(DockPanel panel)
+        private void ReattachContentRecursive(DockPanel panel, HashSet<string> attached)
         {
-            this.TryReattachContent(panel);
+            if (this.TryReattachContent(panel, out var matchedName) && matchedName != null)
+                attached.Add(matchedName);
 
             for (var i = 0; i < panel.Count; i++)
-                this.ReattachContentRecursive(panel[i]);
+                this.ReattachContentRecursive(panel[i], attached);
         }
 
-        private void TryReattachContent(DockPanel panel)
+        private bool TryReattachContent(DockPanel panel, out string? matchedName)
         {
+            matchedName = null;
+
             if (panel.ControlContainer == null)
-                return;
+                return false;
 
             // Name または Text でマッチ
-            var name = panel.Name;
-            if (!this.detailPanelContents.TryGetValue(name, out var content))
-            {
-                if (!this.detailPanelContents.TryGetValue(panel.Text, out content))
-                    return;
-            }
+            string contentKey;
+            if (this.detailPanelContents.ContainsKey(panel.Name))
+                contentKey = panel.Name;
+            else if (this.detailPanelContents.ContainsKey(panel.Text))
+                contentKey = panel.Text;
+            else
+                return false;
+
+            var content = this.detailPanelContents[contentKey];
+            matchedName = contentKey;
 
             // 既に配置済みなら再配置しない
             if (content.Parent == panel.ControlContainer)
-                return;
+                return true;
 
             content.Dock = DockStyle.Fill;
             panel.ControlContainer.ImeMode = System.Windows.Forms.ImeMode.Inherit;
             panel.ControlContainer.Controls.Add(content);
+
+            return true;
         }
 
         protected override void Dispose(bool disposing)
