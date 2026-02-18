@@ -247,6 +247,11 @@ namespace OpenTween
         {
             this.mouseCheckTimer.Stop();
             this.IsMouseOver = false;
+
+            if (this.webViewInitialized && this.webView.CoreWebView2 != null)
+                this.webView.CoreWebView2.Navigate("about:blank");
+
+            this.currentUrl = null;
             this.Hide();
         }
 
