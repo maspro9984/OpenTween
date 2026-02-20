@@ -137,6 +137,8 @@ namespace OpenTween
 
         private readonly ThumbnailGenerator thumbGenerator;
 
+        private readonly LinkPreviewManager linkPreviewManager = new();
+
         /// <summary>発言履歴</summary>
         private readonly StatusTextHistory history = new();
 
@@ -326,7 +328,7 @@ namespace OpenTween
 
             // フォント＆文字色＆背景色保持
             this.themeManager = new(this.settings.Local);
-            this.tweetDetailsView.Initialize(this, this.iconCache, this.themeManager, this.detailsHtmlBuilder);
+            this.tweetDetailsView.Initialize(this, this.iconCache, this.themeManager, this.detailsHtmlBuilder, this.linkPreviewManager);
 
             // sfTab は DocumentManagerTabContainer に移行済み
 
@@ -553,6 +555,8 @@ namespace OpenTween
                 foreach (var drawer in this.listDrawers.Values)
                     drawer.Dispose();
                 this.listDrawers.Clear();
+
+                this.linkPreviewManager.Dispose();
             }
 
             // 終了時にRemoveHandlerしておかないとメモリリークする
@@ -829,6 +833,24 @@ namespace OpenTween
 
             // 新着通知
             this.NotifyNewPosts(notifyPosts, soundFile, addCount, newMentionOrDm);
+
+            // ホームタブの全投稿を走査し、キャッシュが埋まるまでURLをプリロード
+            {
+                var homeTab = this.statuses.HomeTab;
+                var recentUrls = homeTab.StatusIds
+                    .Select(id => homeTab.Posts.TryGetValue(id, out var p) ? p : null)
+                    .Where(p => p != null)
+                    .SelectMany(p => p!.ExpandedUrls)
+                    .Select(u => u.ExpandedUrl)
+                    .Where(u => !string.IsNullOrEmpty(u))
+                    .Where(u => !TimelineListViewDrawer.IsTwitterUserProfileUrl(u))
+                    .Where(u => !TweetDetailsView.IsThumbnailExpandedUrl(u))
+                    .Distinct()
+                    .Take(10)
+                    .ToList();
+                System.Diagnostics.Debug.WriteLine($"[LinkPreview] Preload: 投稿数={homeTab.AllCount}, 対象URL({recentUrls.Count}件): {string.Join(", ", recentUrls)}");
+                this.linkPreviewManager.Preload(recentUrls);
+            }
 
             this.SetMainWindowTitle();
             if (!this.StatusLabelUrl.Text.StartsWith("http", StringComparison.Ordinal)) this.SetStatusLabelUrl();
