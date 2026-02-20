@@ -11,8 +11,9 @@ using OpenTween.OpenTweenCustomControl;
 
 namespace OpenTween.Controls
 {
-    public class DocumentManagerTabContainer : UserControl
+    public class DocumentManagerTabContainer : UserControl, IMessageFilter
     {
+        private const int WM_RBUTTONUP = 0x0205;
         private readonly DockManager dockManager;
 
         /// <summary>タブ名 → (DockPanel, TimelineContentPanel) のマッピング</summary>
@@ -82,6 +83,7 @@ namespace OpenTween.Controls
             this.dockManager.DockingOptions.AllowDockToCenter = DevExpress.Utils.DefaultBoolean.True;
 
             this.dockManager.ActivePanelChanged += this.DockManager_ActivePanelChanged;
+            this.dockManager.PopupMenuShowing += this.DockManager_PopupMenuShowing;
 
             this.MouseUp += this.Container_MouseUp;
             this.KeyDown += (s, e) => this.TabKeyDown?.Invoke(this, e);
@@ -328,15 +330,36 @@ namespace OpenTween.Controls
                 tabName = this.FindTabNameByPanel(newPanel.ActiveChild);
 
             if (tabName == null)
+            {
+                // タブコンテナに紐付けられていない孤立パネル（レイアウト XML の残骸等）は
+                // アクティブ化のタイミングで自動削除する
+                if (newPanel.Name.StartsWith("TimelineTab_", StringComparison.Ordinal) && !newPanel.Tabbed)
+                    this.BeginInvoke(new Action(() => this.RemoveOrphanedPanelSafe(newPanel)));
+
                 return;
+            }
+
+            // TabSelecting ハンドラー内で CurrentTab / CurrentTabName が参照される場合に
+            // 正しい（新しい）タブ名が返るよう、先に currentActiveTabName を更新する
+            var oldActiveTabName = this.currentActiveTabName;
+            this.currentActiveTabName = tabName;
 
             var selectingArgs = new TabSelectingEventArgs(tabName);
             this.TabSelecting?.Invoke(this, selectingArgs);
             if (selectingArgs.Cancel)
+            {
+                this.currentActiveTabName = oldActiveTabName;
                 return;
+            }
 
-            this.currentActiveTabName = tabName;
             this.SelectedTabChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void DockManager_PopupMenuShowing(object sender, PopupMenuShowingEventArgs e)
+        {
+            // DevExpress 標準のポップアップメニューをキャンセル
+            // 独自コンテキストメニューの表示は PreFilterMessage (IMessageFilter) が担当する
+            e.Cancel = true;
         }
 
         /// <summary>
@@ -373,11 +396,11 @@ namespace OpenTween.Controls
 
         public void RestoreLayout(string filePath)
         {
+            if (!File.Exists(filePath))
+                return;
+
             try
             {
-                if (!File.Exists(filePath))
-                    return;
-
                 this.suppressEvents = true;
 
                 // コンテンツコントロールを退避（RestoreLayoutFromXml がパネルを
@@ -390,9 +413,6 @@ namespace OpenTween.Controls
                 // 復元されたパネルにコンテンツコントロールを再配置
                 this.ReattachDetailPanelContents();
                 this.ReattachTabPanelContents();
-
-                // timelineTabContainer 参照を更新
-                this.UpdateTimelineTabContainerReference();
             }
             catch (Exception)
             {
@@ -402,6 +422,16 @@ namespace OpenTween.Controls
             {
                 this.suppressEvents = false;
             }
+
+            // try/catch の外で実行し、例外による中断の影響を受けないようにする。
+            // また suppressEvents リセット後に実行することで DevExpress の処理が完了した状態で動作する。
+
+            // レイアウト保存時には存在したが現在対応するタブがない孤立パネルを削除
+            // （RelatedTweetsなど非永続タブが保存されていた場合に空パネルとして残るのを防ぐ）
+            this.RemoveOrphanedTabPanels();
+
+            // timelineTabContainer 参照を更新
+            this.UpdateTimelineTabContainerReference();
         }
 
         /// <summary>
@@ -618,6 +648,113 @@ namespace OpenTween.Controls
         }
 
         /// <summary>
+        /// レイアウト復元後、tabMap に登録されていないタイムライン DockPanel を削除する。
+        /// dockManager.Panels はネストしたパネルを返さない場合があるため、
+        /// RootPanels の再帰探索を主体とし、dockManager.Panels で浮動パネルを補完する。
+        /// </summary>
+        private void RemoveOrphanedTabPanels()
+        {
+            var knownPanels = new HashSet<DockPanel>(this.tabMap.Values.Select(e => e.Panel));
+            var orphans = new List<DockPanel>();
+
+            // RootPanels を起点に全パネルを再帰探索（タブグループ内のネストしたパネルをカバー）
+            foreach (DockPanel rootPanel in this.dockManager.RootPanels)
+                this.CollectOrphanedPanelsRecursive(rootPanel, knownPanels, orphans);
+
+            // dockManager.Panels でフローティングパネル等を補完
+            // （RootPanels 配下に含まれないパネルが存在する場合の安全策）
+            foreach (DockPanel panel in this.dockManager.Panels)
+            {
+                if (!orphans.Contains(panel) && this.IsOrphanedLeafPanel(panel, knownPanels))
+                    orphans.Add(panel);
+            }
+
+            foreach (var orphan in orphans)
+                this.RemoveOrphanedPanelSafe(orphan);
+        }
+
+        private void CollectOrphanedPanelsRecursive(DockPanel panel, HashSet<DockPanel> knownPanels, List<DockPanel> orphans)
+        {
+            if (!orphans.Contains(panel) && this.IsOrphanedLeafPanel(panel, knownPanels))
+                orphans.Add(panel);
+
+            for (var i = 0; i < panel.Count; i++)
+                this.CollectOrphanedPanelsRecursive(panel[i], knownPanels, orphans);
+        }
+
+        /// <summary>
+        /// パネルが孤立したリーフパネル（削除すべき不要パネル）かどうかを判定する。
+        /// 主判定は名前プレフィックス（XML復元後も保持される場合）、
+        /// 補完判定はコントロールコンテナが空であること（コンテンツが再配置されなかった場合）。
+        /// </summary>
+        private bool IsOrphanedLeafPanel(DockPanel panel, HashSet<DockPanel> knownPanels)
+        {
+            // タブコンテナ（Tabbed=true）はリーフパネルでないため対象外
+            if (panel.Tabbed)
+                return false;
+
+            // 有効なタイムラインパネル（tabMap 登録済み）は対象外
+            if (knownPanels.Contains(panel))
+                return false;
+
+            // 有効な詳細パネル（detailPanelContents 登録済み）は対象外
+            if (this.detailPanelContents.ContainsKey(panel.Name) || this.detailPanelContents.ContainsKey(panel.Text))
+                return false;
+
+            // 主判定: 名前プレフィックスで識別（AddTab で付与した "TimelineTab_" が保持されている場合）
+            if (panel.Name.StartsWith("TimelineTab_", StringComparison.Ordinal))
+                return true;
+
+            // 補完判定: XML 復元後に名前が変わった場合のフォールバック。
+            // ReattachTabPanelContents / ReattachDetailPanelContents の後、
+            // 有効なパネルにはコンテンツが配置されるため Controls.Count > 0 になる。
+            // コンテンツが空のリーフパネルは孤立パネルとみなす。
+            if (panel.ControlContainer != null && panel.ControlContainer.Controls.Count == 0)
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// 指定パネル（またはそのアクティブ子）が孤立タイムラインパネルであれば返す。
+        /// tabMap に存在しない TimelineTab_ パネルを孤立パネルと判定する。
+        /// </summary>
+        private DockPanel? FindOrphanedTimelinePanel(DockPanel panel)
+        {
+            // 直接パネルが孤立タイムラインパネルか確認（タブコンテナ自体は除外）
+            if (panel.Name.StartsWith("TimelineTab_", StringComparison.Ordinal) && !panel.Tabbed)
+            {
+                if (!this.tabMap.Values.Any(e => e.Panel == panel))
+                    return panel;
+            }
+
+            // タブコンテナの場合、アクティブな子が孤立パネルかチェック
+            if (panel.Tabbed && panel.ActiveChild != null)
+            {
+                var child = panel.ActiveChild;
+                if (child.Name.StartsWith("TimelineTab_", StringComparison.Ordinal) && !child.Tabbed &&
+                    !this.tabMap.Values.Any(e => e.Panel == child))
+                    return child;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 孤立パネルを安全に削除する。既に削除済みの場合は例外を無視する。
+        /// </summary>
+        private void RemoveOrphanedPanelSafe(DockPanel panel)
+        {
+            try
+            {
+                this.dockManager.RemovePanel(panel);
+            }
+            catch (Exception)
+            {
+            }
+        }
+
+        /// <summary>
         /// レイアウト復元後、timelineTabContainer 参照を更新する
         /// </summary>
         private void UpdateTimelineTabContainerReference()
@@ -633,6 +770,90 @@ namespace OpenTween.Controls
                 this.timelineTabContainer = firstEntry.Panel.ParentPanel;
             else
                 this.timelineTabContainer = firstEntry.Panel;
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            Application.AddMessageFilter(this);
+        }
+
+        protected override void OnHandleDestroyed(EventArgs e)
+        {
+            Application.RemoveMessageFilter(this);
+            base.OnHandleDestroyed(e);
+        }
+
+        /// <summary>
+        /// タブストリップ領域の右クリックを捕捉し、独自コンテキストメニューを表示する。
+        /// DevExpress の PopupMenuShowing はタブストリップでは発火しないため
+        /// メッセージフィルターで WM_RBUTTONUP を直接インターセプトする。
+        /// </summary>
+        public bool PreFilterMessage(ref Message m)
+        {
+            if (m.Msg != WM_RBUTTONUP)
+                return false;
+
+            if (this.IsDisposed || !this.IsHandleCreated)
+                return false;
+
+            var cursorPos = Cursor.Position;
+            var localPos = this.PointToClient(cursorPos);
+            if (!this.ClientRectangle.Contains(localPos))
+                return false;
+
+            // タブ名を特定: まずクリック位置のパネルを試みる
+            string? tabName = null;
+            var panel = this.dockManager.GetDockPanelAtPos(cursorPos);
+            if (panel != null)
+            {
+                tabName = this.FindTabNameByPanel(panel);
+                if (tabName == null && panel.Tabbed && panel.ActiveChild != null)
+                    tabName = this.FindTabNameByPanel(panel.ActiveChild);
+            }
+
+            // タブコンテナの全子パネルを走査して孤立パネルを削除する。
+            // GetDockPanelAtPos はコンテナを返すため、ActiveChild（最後に左クリックされたタブ）
+            // でなく別の孤立タブを右クリックした場合でも全子を走査することで確実に検出できる。
+            if (panel != null && panel.Tabbed)
+            {
+                var knownPanels = new HashSet<DockPanel>(this.tabMap.Values.Select(e => e.Panel));
+                for (var i = 0; i < panel.Count; i++)
+                {
+                    var child = panel[i];
+                    if (child.Name.StartsWith("TimelineTab_", StringComparison.Ordinal) && !child.Tabbed && !knownPanels.Contains(child))
+                    {
+                        var orphan = child;
+                        this.BeginInvoke(new Action(() => this.RemoveOrphanedPanelSafe(orphan)));
+                    }
+                }
+            }
+
+            // 直接の孤立パネル（コンテナでない場合）はコンテキストメニューなしで削除
+            if (tabName == null && panel != null)
+            {
+                var directOrphan = this.FindOrphanedTimelinePanel(panel);
+                if (directOrphan != null)
+                {
+                    this.BeginInvoke(new Action(() => this.RemoveOrphanedPanelSafe(directOrphan)));
+                    return false;
+                }
+            }
+
+            // 孤立パネルでない場合は現在アクティブなタブへフォールバック
+            if (tabName == null)
+                tabName = this.currentActiveTabName;
+
+            if (tabName == null)
+                return false;
+
+            this.RightClickedTabName = tabName;
+            var showPoint = cursorPos;
+            this.BeginInvoke(new Action(() => this.TabContextMenuStrip?.Show(showPoint)));
+
+            // false を返して DevExpress にもメッセージを渡す（タブ選択動作などを維持）
+            // PopupMenuShowing ハンドラーで DevExpress 標準ポップアップはキャンセルされる
+            return false;
         }
 
         protected override void Dispose(bool disposing)
