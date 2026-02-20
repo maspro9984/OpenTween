@@ -116,6 +116,9 @@ namespace OpenTween
             this.webView.CoreWebView2.Settings.UserAgent =
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
+            // ステータスバー（左下のリンクURL表示）を無効化（非表示後の描画ゴミ対策）
+            this.webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+
             // 新しいウィンドウを開かないようにする
             this.webView.CoreWebView2.NewWindowRequested += (s, args) =>
             {
