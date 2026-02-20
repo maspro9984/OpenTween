@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using OpenTween.Connection;
+using OpenTween.Models;
 using OpenTween.Thumbnail;
 
 namespace OpenTween
@@ -21,6 +22,9 @@ namespace OpenTween
 
         /// <summary>マウスがプレビューフォーム上にあるかどうか</summary>
         public bool IsMouseOver { get; private set; }
+
+        /// <summary>フルサイズ画像のキャッシュ</summary>
+        public ThumbnailImageCache? ImageCache { get; set; }
 
         /// <summary>プレビューを閉じるべきときに発火するイベント</summary>
         public event EventHandler? PreviewHidden;
@@ -76,6 +80,20 @@ namespace OpenTween
             if (imageUrl == this.lastLoadedUrl && this.Visible)
                 return;
 
+            // キャッシュチェック（ヒットした場合は即座に表示）
+            if (this.ImageCache?.TryGet(imageUrl) is { } cachedImage)
+            {
+                this.loadCts?.Cancel();
+                var cloned = cachedImage.Clone();
+                this.pictureBox.Image = cloned;
+                this.lastLoadedUrl = imageUrl;
+                this.originalImageSize = cloned.Image.Size;
+                this.zoomScale = 1.0;
+                this.AdjustSizeAndPosition(cloned.Image.Size, position);
+                this.Show();
+                return;
+            }
+
             this.loadCts?.Cancel();
             this.loadCts = new CancellationTokenSource();
             var token = this.loadCts.Token;
@@ -90,12 +108,24 @@ namespace OpenTween
                 if (token.IsCancellationRequested)
                     return;
 
-                this.pictureBox.Image = image;
+                // キャッシュに保存して、表示用にクローンを使用
+                MemoryImage displayImage;
+                if (this.ImageCache != null)
+                {
+                    this.ImageCache.Store(imageUrl, image);
+                    displayImage = image.Clone();
+                }
+                else
+                {
+                    displayImage = image;
+                }
+
+                this.pictureBox.Image = displayImage;
                 this.lastLoadedUrl = imageUrl;
-                this.originalImageSize = image.Image.Size;
+                this.originalImageSize = displayImage.Image.Size;
                 this.zoomScale = 1.0;
 
-                this.AdjustSizeAndPosition(image.Image.Size, position);
+                this.AdjustSizeAndPosition(displayImage.Image.Size, position);
                 this.Show();
             }
             catch (OperationCanceledException)

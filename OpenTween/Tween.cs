@@ -138,6 +138,7 @@ namespace OpenTween
         private readonly ThumbnailGenerator thumbGenerator;
 
         private readonly LinkPreviewManager linkPreviewManager = new();
+        private readonly ThumbnailImageCache thumbnailImageCache = new();
 
         /// <summary>発言履歴</summary>
         private readonly StatusTextHistory history = new();
@@ -314,6 +315,7 @@ namespace OpenTween
             this.ImageSelector.Model.SelectMediaService(this.settings.Common.UseImageServiceName, this.settings.Common.UseImageService);
 
             this.tweetThumbnail1.Model.Initialize(this.thumbGenerator);
+            this.tweetThumbnail1.ImageCache = this.thumbnailImageCache;
 
             // ハッシュタグ/@id関連
             this.AtIdSupl = new AtIdSupplement(this.settings.AtIdList.AtIdList, "@");
@@ -557,6 +559,7 @@ namespace OpenTween
                 this.listDrawers.Clear();
 
                 this.linkPreviewManager.Dispose();
+                this.thumbnailImageCache.Dispose();
             }
 
             // 終了時にRemoveHandlerしておかないとメモリリークする
