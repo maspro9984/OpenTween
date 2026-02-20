@@ -18,6 +18,8 @@
                 components?.Dispose();
                 this.linkHoverTimer?.Dispose();
                 this.linkHideDelayTimer?.Dispose();
+                this.postHoverTimer?.Dispose();
+                this.postHideDelayTimer?.Dispose();
             }
             base.Dispose(disposing);
         }
