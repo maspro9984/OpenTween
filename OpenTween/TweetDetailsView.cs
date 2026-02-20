@@ -97,6 +97,10 @@ namespace OpenTween
         private System.Windows.Forms.Timer? linkHideDelayTimer;
         private string? pendingPreviewUrl;
 
+        private LinkPreviewManager? postPreviewManager;
+        private System.Windows.Forms.Timer? postHoverTimer;
+        private System.Windows.Forms.Timer? postHideDelayTimer;
+
         public TweetDetailsView()
         {
             this.InitializeComponent();
@@ -110,15 +114,19 @@ namespace OpenTween
 
             new InternetSecurityManager(this.PostBrowser);
             this.PostBrowser.AllowWebBrowserDrop = false;  // COMException を回避するため、ActiveX の初期化が終わってから設定する
+
+            this.DateTimeLabel.MouseEnter += this.DateTimeLabel_MouseEnter;
+            this.DateTimeLabel.MouseLeave += this.DateTimeLabel_MouseLeave;
         }
 
-        public void Initialize(TweenMain owner, ImageCache iconCache, ThemeManager themeManager, DetailsHtmlBuilder detailsHtmlBuilder, LinkPreviewManager linkPreviewManager)
+        public void Initialize(TweenMain owner, ImageCache iconCache, ThemeManager themeManager, DetailsHtmlBuilder detailsHtmlBuilder, LinkPreviewManager linkPreviewManager, LinkPreviewManager postPreviewManager)
         {
             this.owner = owner;
             this.iconCache = iconCache;
             this.themeManager = themeManager;
             this.detailsHtmlBuilder = detailsHtmlBuilder;
             this.linkPreviewManager = linkPreviewManager;
+            this.postPreviewManager = postPreviewManager;
         }
 
         private Exception NotInitializedException()
@@ -138,6 +146,10 @@ namespace OpenTween
                 .Where(u => !TimelineListViewDrawer.IsTwitterUserProfileUrl(u))
                 .Where(u => !IsThumbnailExpandedUrl(u));
             this.linkPreviewManager?.Preload(preloadUrls);
+
+            // 投稿パーマリンクをプリロード（日付ラベルホバー用）
+            if (post.PostUri != null)
+                this.postPreviewManager?.Preload(new[] { post.PostUri.AbsoluteUri });
 
             var loadTasks = new TaskCollection();
 
@@ -1258,6 +1270,40 @@ namespace OpenTween
         {
             if (this.CurrentPost?.PostUri is { } postUri)
                 await MyCommon.OpenInBrowserAsync(this, postUri);
+        }
+
+        private void DateTimeLabel_MouseEnter(object? sender, EventArgs e)
+        {
+            this.postHoverTimer?.Stop();
+            this.postHoverTimer?.Dispose();
+            this.postHoverTimer = new System.Windows.Forms.Timer { Interval = 500 };
+            this.postHoverTimer.Tick += this.PostHoverTimer_Tick;
+            this.postHoverTimer.Start();
+        }
+
+        private void DateTimeLabel_MouseLeave(object? sender, EventArgs e)
+        {
+            this.postHoverTimer?.Stop();
+            this.postHideDelayTimer?.Stop();
+            this.postHideDelayTimer?.Dispose();
+            this.postHideDelayTimer = new System.Windows.Forms.Timer { Interval = 200 };
+            this.postHideDelayTimer.Tick += this.PostHideDelayTimer_Tick;
+            this.postHideDelayTimer.Start();
+        }
+
+        private void PostHoverTimer_Tick(object? sender, EventArgs e)
+        {
+            this.postHoverTimer?.Stop();
+            if (this.CurrentPost?.PostUri is { } postUri)
+                this.postPreviewManager?.ShowPreview(postUri.AbsoluteUri, Cursor.Position);
+        }
+
+        private void PostHideDelayTimer_Tick(object? sender, EventArgs e)
+        {
+            this.postHideDelayTimer?.Stop();
+            if (this.postPreviewManager != null && this.postPreviewManager.IsAnyFormMouseOver)
+                return;
+            this.postPreviewManager?.HideAll();
         }
     }
 
