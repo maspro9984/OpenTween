@@ -23,6 +23,8 @@ namespace OpenTween
 
         public bool IsMouseOver { get; private set; }
 
+        public string? CurrentUrl => this.currentUrl;
+
         public event EventHandler? PreviewHidden;
 
         public LinkPreviewForm()
@@ -156,6 +158,18 @@ namespace OpenTween
             }
         }
 
+        public void Navigate(string url)
+            => this.NavigateTo(url);
+
+        public void ShowAt(Point screenPos)
+        {
+            this.AdjustSizeAndPosition(screenPos);
+            this.IsMouseOver = true;
+            this.mouseEnteredOnce = false;
+            this.mouseCheckTimer.Start();
+            this.Show();
+        }
+
         public void ShowPreview(string url, Point position)
         {
             if (url == this.currentUrl && this.Visible)
@@ -233,7 +247,7 @@ namespace OpenTween
 
                 this.mouseCheckTimer.Stop();
                 this.PreviewHidden?.Invoke(this, EventArgs.Empty);
-                this.HidePreview();
+                this.HideOnly();
             }
         }
 
@@ -243,6 +257,15 @@ namespace OpenTween
                 await MyCommon.OpenInBrowserAsync(this, this.currentUrl);
         }
 
+        // ページを維持したまま非表示にする（プールのキャッシュを保持するため）
+        public void HideOnly()
+        {
+            this.mouseCheckTimer.Stop();
+            this.IsMouseOver = false;
+            this.Hide();
+        }
+
+        // ページをアンロードして完全リセット（プールから追い出すときのみ使用）
         public void HidePreview()
         {
             this.mouseCheckTimer.Stop();

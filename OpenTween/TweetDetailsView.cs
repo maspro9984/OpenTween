@@ -92,7 +92,7 @@ namespace OpenTween
         private ThemeManager? themeManager;
         private DetailsHtmlBuilder? detailsHtmlBuilder;
 
-        private LinkPreviewForm? linkPreviewForm;
+        private LinkPreviewManager? linkPreviewManager;
         private System.Windows.Forms.Timer? linkHoverTimer;
         private System.Windows.Forms.Timer? linkHideDelayTimer;
         private string? pendingPreviewUrl;
@@ -112,12 +112,13 @@ namespace OpenTween
             this.PostBrowser.AllowWebBrowserDrop = false;  // COMException を回避するため、ActiveX の初期化が終わってから設定する
         }
 
-        public void Initialize(TweenMain owner, ImageCache iconCache, ThemeManager themeManager, DetailsHtmlBuilder detailsHtmlBuilder)
+        public void Initialize(TweenMain owner, ImageCache iconCache, ThemeManager themeManager, DetailsHtmlBuilder detailsHtmlBuilder, LinkPreviewManager linkPreviewManager)
         {
             this.owner = owner;
             this.iconCache = iconCache;
             this.themeManager = themeManager;
             this.detailsHtmlBuilder = detailsHtmlBuilder;
+            this.linkPreviewManager = linkPreviewManager;
         }
 
         private Exception NotInitializedException()
@@ -129,6 +130,14 @@ namespace OpenTween
         public async Task ShowPostDetails(PostClass post)
         {
             this.CurrentPost = post;
+
+            // 詳細表示したツイートのリンクをプリロード（ホバー前にキャッシュしておく）
+            var preloadUrls = post.ExpandedUrls
+                .Select(u => u.ExpandedUrl)
+                .Where(u => !string.IsNullOrEmpty(u))
+                .Where(u => !TimelineListViewDrawer.IsTwitterUserProfileUrl(u))
+                .Where(u => !IsThumbnailExpandedUrl(u));
+            this.linkPreviewManager?.Preload(preloadUrls);
 
             var loadTasks = new TaskCollection();
 
@@ -615,13 +624,9 @@ namespace OpenTween
             if (this.pendingPreviewUrl == null)
                 return;
 
-            if (this.linkPreviewForm == null || this.linkPreviewForm.IsDisposed)
-            {
-                this.linkPreviewForm = new LinkPreviewForm();
-                this.linkPreviewForm.PreviewHidden += this.LinkPreviewForm_PreviewHidden;
-            }
-
-            this.linkPreviewForm.ShowPreview(this.pendingPreviewUrl, Cursor.Position);
+            // PostBrowser の StatusText は t.co 短縮URLなので展開済みURLに変換してからキャッシュを検索する
+            var url = this.CurrentPost?.GetExpandedUrl(this.pendingPreviewUrl) ?? this.pendingPreviewUrl;
+            this.linkPreviewManager?.ShowPreview(url, Cursor.Position);
         }
 
         private void LinkHideDelayTimer_Tick(object? sender, EventArgs e)
@@ -629,10 +634,10 @@ namespace OpenTween
             this.linkHideDelayTimer?.Stop();
 
             // マウスがプレビューフォーム上にある場合は閉じない
-            if (this.linkPreviewForm != null && this.linkPreviewForm.IsMouseOver)
+            if (this.linkPreviewManager != null && this.linkPreviewManager.IsAnyFormMouseOver)
                 return;
 
-            this.linkPreviewForm?.HidePreview();
+            this.linkPreviewManager?.HideAll();
         }
 
         private bool IsThumbnailUrl(string url)
@@ -669,7 +674,7 @@ namespace OpenTween
             return IsThumbnailExpandedUrl(expandedUrl);
         }
 
-        private static bool IsThumbnailExpandedUrl(string expandedUrl)
+        internal static bool IsThumbnailExpandedUrl(string expandedUrl)
         {
             // 画像直リンク
             if (Regex.IsMatch(expandedUrl, @"\.(jpg|jpeg|gif|png|bmp|webp)(\?.*)?$", RegexOptions.IgnoreCase))

@@ -448,6 +448,24 @@ namespace OpenTween
             }
         }
 
+        internal static bool IsTwitterUserProfileUrl(string url)
+        {
+            if (!url.StartsWith("https://twitter.com/", StringComparison.OrdinalIgnoreCase) &&
+                !url.StartsWith("https://x.com/", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            // パスが1セグメント（ユーザー名のみ）であればユーザープロフィールURL
+            try
+            {
+                var path = new Uri(url).AbsolutePath.Trim('/');
+                return path.IndexOf('/') < 0;
+            }
+            catch (UriFormatException)
+            {
+                return false;
+            }
+        }
+
         public void Dispose()
         {
             if (this.IsDisposed)
