@@ -119,6 +119,9 @@ namespace OpenTween
             // ステータスバー（左下のリンクURL表示）を無効化（非表示後の描画ゴミ対策）
             this.webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
 
+            // プリロード中（非表示）は音声をミュートしておく
+            this.webView.CoreWebView2.IsMuted = true;
+
             // 新しいウィンドウを開かないようにする
             this.webView.CoreWebView2.NewWindowRequested += (s, args) =>
             {
@@ -166,6 +169,10 @@ namespace OpenTween
 
         public void ShowAt(Point screenPos)
         {
+            // 表示時にミュートを解除する
+            if (this.webViewInitialized && this.webView.CoreWebView2 != null)
+                this.webView.CoreWebView2.IsMuted = false;
+
             this.AdjustSizeAndPosition(screenPos);
             this.IsMouseOver = true;
             this.mouseEnteredOnce = false;
@@ -181,6 +188,10 @@ namespace OpenTween
             this.currentUrl = url;
             this.urlLabel.Text = url;
             this.NavigateTo(url);
+
+            // 表示時にミュートを解除する
+            if (this.webViewInitialized && this.webView.CoreWebView2 != null)
+                this.webView.CoreWebView2.IsMuted = false;
 
             this.AdjustSizeAndPosition(position);
             this.IsMouseOver = true;
@@ -265,6 +276,15 @@ namespace OpenTween
         {
             this.mouseCheckTimer.Stop();
             this.IsMouseOver = false;
+
+            // 非表示時に動画・音声を停止してミュートする
+            if (this.webViewInitialized && this.webView.CoreWebView2 != null)
+            {
+                this.webView.CoreWebView2.IsMuted = true;
+                _ = this.webView.CoreWebView2.ExecuteScriptAsync(
+                    "document.querySelectorAll('video,audio').forEach(function(el){el.pause();});");
+            }
+
             this.Hide();
         }
 

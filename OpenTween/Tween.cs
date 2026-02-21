@@ -1791,7 +1791,9 @@ namespace OpenTween
                 foreach (var account in this.accounts.SecondaryAccounts)
                     this.statuses.RefreshOwl(account.UniqueKey, account.AccountState.FollowerIds, isPrimary: false);
 
-                this.listCache?.PurgeCache();
+                foreach (var cache in this.listCaches.Values)
+                    cache.PurgeCache();
+
                 this.CurrentListView.Refresh();
 
                 this.StatusLabel.Text = Properties.Resources.RefreshConfiguration_Success;
@@ -5507,6 +5509,18 @@ namespace OpenTween
                 var state = this.listViewState[origTabName];
                 this.listViewState.Remove(origTabName);
                 this.listViewState[newTabName] = state;
+
+                if (this.listCaches.TryGetValue(origTabName, out var listCache))
+                {
+                    this.listCaches.Remove(origTabName);
+                    this.listCaches[newTabName] = listCache;
+                }
+
+                if (this.listDrawers.TryGetValue(origTabName, out var listDrawer))
+                {
+                    this.listDrawers.Remove(origTabName);
+                    this.listDrawers[newTabName] = listDrawer;
+                }
 
                 this.SaveConfigsCommon();
                 this.SaveConfigsTabs();
