@@ -216,8 +216,8 @@ namespace OpenTween
         {
             var screen = Screen.FromPoint(cursorPosition).WorkingArea;
 
-            var width = Math.Min((int)(screen.Width * 0.55), 880);
-            var height = Math.Min((int)(screen.Height * 0.75), 900);
+            var width = Math.Min((int)(screen.Width * 0.715), 1144);
+            var height = Math.Min((int)(screen.Height * 0.9), 1080);
 
             this.Size = new Size(width, height);
 

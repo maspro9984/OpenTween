@@ -276,9 +276,9 @@ namespace OpenTween
         {
             var localTime = createdAt.ToLocalTime();
             if (localTime.Date == DateTimeOffset.Now.Date)
-                return localTime.ToString("H:mm");
+                return localTime.ToString("H:mm:ss");
             else
-                return localTime.ToString("M/d H:mm");
+                return localTime.ToString("M/d H:mm:ss");
         }
 
         private ListItemStyle DetermineListItemStyle(PostClass post)
