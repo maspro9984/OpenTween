@@ -1049,6 +1049,7 @@ namespace OpenTween.Api
                     Assert.Equal(new("followers/ids.json", UriKind.Relative), r.RequestUri);
                     var expectedQuery = new Dictionary<string, string>
                     {
+                        ["stringify_ids"] = "true",
                         ["cursor"] = "-1",
                     };
                     Assert.Equal(expectedQuery, r.Query);
@@ -1074,6 +1075,7 @@ namespace OpenTween.Api
                     Assert.Equal(new("mutes/users/ids.json", UriKind.Relative), r.RequestUri);
                     var expectedQuery = new Dictionary<string, string>
                     {
+                        ["stringify_ids"] = "true",
                         ["cursor"] = "-1",
                     };
                     Assert.Equal(expectedQuery, r.Query);
@@ -1099,6 +1101,7 @@ namespace OpenTween.Api
                     Assert.Equal(new("blocks/ids.json", UriKind.Relative), r.RequestUri);
                     var expectedQuery = new Dictionary<string, string>
                     {
+                        ["stringify_ids"] = "true",
                         ["cursor"] = "-1",
                     };
                     Assert.Equal(expectedQuery, r.Query);

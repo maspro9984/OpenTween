@@ -310,13 +310,30 @@ namespace OpenTween.SocialProtocol.Twitter
 
         public async Task RefreshConfiguration()
         {
-            await Task.WhenAll(new[]
+            // 各タスクを独立して実行し、一部が失敗してもフォロワーID等の取得を継続する
+            WebApiException? firstError = null;
+
+            async Task RunSafe(Task task)
             {
-                this.account.Legacy.RefreshFollowerIds(),
-                this.account.Legacy.RefreshBlockIds(),
-                this.account.Legacy.RefreshMuteUserIdsAsync(),
-                this.account.Legacy.RefreshNoRetweetIds(),
-            });
+                try
+                {
+                    await task.ConfigureAwait(false);
+                }
+                catch (WebApiException ex)
+                {
+                    firstError ??= ex;
+                }
+            }
+
+            await Task.WhenAll(
+                RunSafe(this.account.Legacy.RefreshFollowerIds()),
+                RunSafe(this.account.Legacy.RefreshBlockIds()),
+                RunSafe(this.account.Legacy.RefreshMuteUserIdsAsync()),
+                RunSafe(this.account.Legacy.RefreshNoRetweetIds())
+            );
+
+            if (firstError != null)
+                throw firstError;
         }
 
         private TwitterStatusId AssertTwitterStatusId(PostId postId)

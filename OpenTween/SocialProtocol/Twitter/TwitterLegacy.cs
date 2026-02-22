@@ -620,31 +620,92 @@ namespace OpenTween.SocialProtocol.Twitter
         }
 
         /// <summary>
-        /// フォロワーIDを更新します
+        /// フォロワーIDを更新します。
+        /// API 取得に失敗した場合はキャッシュファイルから復元します。
         /// </summary>
         /// <exception cref="WebApiException"/>
         public async Task RefreshFollowerIds()
         {
             if (MyCommon.EndingFlag) return;
 
-            var cursor = -1L;
-            var newFollowerIds = Enumerable.Empty<PersonId>();
-            do
+            try
             {
-                var ret = await this.Api.FollowersIds(cursor)
-                    .ConfigureAwait(false);
+                var cursor = -1L;
+                var newFollowerIds = Enumerable.Empty<PersonId>();
+                do
+                {
+                    var ret = await this.Api.FollowersIds(cursor)
+                        .ConfigureAwait(false);
 
-                if (ret.Ids == null)
-                    throw new WebApiException("ret.ids == null");
+                    if (ret.Ids == null)
+                        throw new WebApiException("ret.ids == null");
 
-                newFollowerIds = newFollowerIds.Concat(ret.Ids.Select(x => new TwitterUserId(x)));
-                cursor = ret.NextCursor;
+                    newFollowerIds = newFollowerIds.Concat(ret.Ids.Select(x => new TwitterUserId(x)));
+                    cursor = ret.NextCursor;
+                }
+                while (cursor != 0);
+
+                this.AccountState.FollowerIds = newFollowerIds.ToHashSet();
+                this.GetFollowersSuccess = true;
+
+                // 成功時にキャッシュへ保存
+                this.SaveFollowerIdsCache(this.AccountState.FollowerIds);
             }
-            while (cursor != 0);
+            catch (WebApiException)
+            {
+                // API 失敗時はキャッシュから復元を試みる
+                if (this.AccountState.FollowerIds.Count == 0)
+                {
+                    var cached = this.LoadFollowerIdsCache();
+                    if (cached.Count > 0)
+                    {
+                        this.AccountState.FollowerIds = cached;
+                        this.GetFollowersSuccess = true;
+                    }
+                }
 
-            this.AccountState.FollowerIds = newFollowerIds.ToHashSet();
+                throw;
+            }
+        }
 
-            this.GetFollowersSuccess = true;
+        private string GetFollowerIdsCachePath()
+        {
+            var settingsPath = SettingManager.Instance.SettingsPath;
+            return System.IO.Path.Combine(settingsPath, $"FollowerIds_{this.UserId}.txt");
+        }
+
+        private void SaveFollowerIdsCache(ISet<PersonId> followerIds)
+        {
+            try
+            {
+                var path = this.GetFollowerIdsCachePath();
+                var lines = followerIds.Select(x => x.Id);
+                System.IO.File.WriteAllLines(path, lines);
+            }
+            catch (Exception)
+            {
+                // キャッシュ保存失敗は無視
+            }
+        }
+
+        private HashSet<PersonId> LoadFollowerIdsCache()
+        {
+            try
+            {
+                var path = this.GetFollowerIdsCachePath();
+                if (!System.IO.File.Exists(path))
+                    return new HashSet<PersonId>();
+
+                var lines = System.IO.File.ReadAllLines(path);
+                return lines
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Select(x => (PersonId)new TwitterUserId(x))
+                    .ToHashSet();
+            }
+            catch (Exception)
+            {
+                return new HashSet<PersonId>();
+            }
         }
 
         /// <summary>
