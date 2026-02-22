@@ -873,7 +873,11 @@ namespace OpenTween.Api
 
         public async Task<TwitterIds> FollowersIds(long? cursor = null)
         {
-            var param = new Dictionary<string, string>();
+            var param = new Dictionary<string, string>
+            {
+                // IDを文字列として返してもらうことでDataContractJsonSerializerのstring[]への変換を確実にする
+                ["stringify_ids"] = "true",
+            };
 
             if (cursor != null)
                 param["cursor"] = cursor.ToString();
@@ -894,7 +898,10 @@ namespace OpenTween.Api
 
         public async Task<TwitterIds> MutesUsersIds(long? cursor = null)
         {
-            var param = new Dictionary<string, string>();
+            var param = new Dictionary<string, string>
+            {
+                ["stringify_ids"] = "true",
+            };
 
             if (cursor != null)
                 param["cursor"] = cursor.ToString();
@@ -915,7 +922,10 @@ namespace OpenTween.Api
 
         public async Task<TwitterIds> BlocksIds(long? cursor = null)
         {
-            var param = new Dictionary<string, string>();
+            var param = new Dictionary<string, string>
+            {
+                ["stringify_ids"] = "true",
+            };
 
             if (cursor != null)
                 param["cursor"] = cursor.ToString();

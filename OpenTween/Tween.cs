@@ -1779,13 +1779,22 @@ namespace OpenTween
                 this.RefreshTasktrayIcon();
                 this.StatusLabel.Text = Properties.Resources.RefreshConfiguration_Start;
 
-                var loadTasks =
-                    from account in this.accounts.Items
-                    select account.Client.RefreshConfiguration();
-
-                await Task.WhenAll(loadTasks);
+                // アカウントごとに個別に実行し、一部が失敗しても RefreshOwl を必ず呼ぶ
+                WebApiException? lastError = null;
+                foreach (var account in this.accounts.Items)
+                {
+                    try
+                    {
+                        await account.Client.RefreshConfiguration();
+                    }
+                    catch (WebApiException ex)
+                    {
+                        lastError = ex;
+                    }
+                }
 
                 var primaryAccount = this.accounts.Primary;
+                var followerCount = primaryAccount.AccountState.FollowerIds.Count;
                 this.statuses.RefreshOwl(primaryAccount.UniqueKey, primaryAccount.AccountState.FollowerIds, isPrimary: true);
 
                 foreach (var account in this.accounts.SecondaryAccounts)
@@ -1794,11 +1803,14 @@ namespace OpenTween
                 foreach (var cache in this.listCaches.Values)
                     cache.PurgeCache();
 
-                this.CurrentListView.Refresh();
+                foreach (var listView in this.ListTab.GetAllListViews())
+                    listView.Refresh();
 
-                this.StatusLabel.Text = Properties.Resources.RefreshConfiguration_Success;
+                this.StatusLabel.Text = lastError != null
+                    ? Properties.Resources.RefreshConfiguration_Error + $"[followers:{followerCount}] " + lastError.Message
+                    : Properties.Resources.RefreshConfiguration_Success + $" [followers:{followerCount}]";
             }
-            catch (WebApiException ex)
+            catch (Exception ex)
             {
                 this.StatusLabel.Text = Properties.Resources.RefreshConfiguration_Error + ex.Message;
             }
