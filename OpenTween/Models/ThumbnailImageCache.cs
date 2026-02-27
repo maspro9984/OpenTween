@@ -8,7 +8,7 @@ namespace OpenTween.Models
 {
     public sealed class ThumbnailImageCache : IDisposable
     {
-        private const int MaxSize = 20;
+        private const int MaxSize = 10;
 
         private readonly Dictionary<string, MemoryImage> cache = new();
         private readonly Queue<string> insertOrder = new();

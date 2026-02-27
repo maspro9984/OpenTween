@@ -138,7 +138,6 @@ namespace OpenTween
         private readonly ThumbnailGenerator thumbGenerator;
 
         private readonly LinkPreviewManager linkPreviewManager = new();
-        private readonly LinkPreviewManager postPreviewManager = new();
         private readonly ThumbnailImageCache thumbnailImageCache = new();
 
         /// <summary>発言履歴</summary>
@@ -331,7 +330,7 @@ namespace OpenTween
 
             // フォント＆文字色＆背景色保持
             this.themeManager = new(this.settings.Local);
-            this.tweetDetailsView.Initialize(this, this.iconCache, this.themeManager, this.detailsHtmlBuilder, this.linkPreviewManager, this.postPreviewManager);
+            this.tweetDetailsView.Initialize(this, this.iconCache, this.themeManager, this.detailsHtmlBuilder, this.linkPreviewManager);
 
             // sfTab は DocumentManagerTabContainer に移行済み
 
@@ -560,7 +559,6 @@ namespace OpenTween
                 this.listDrawers.Clear();
 
                 this.linkPreviewManager.Dispose();
-                this.postPreviewManager.Dispose();
                 this.thumbnailImageCache.Dispose();
             }
 

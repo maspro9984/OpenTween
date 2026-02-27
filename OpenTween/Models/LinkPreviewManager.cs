@@ -10,6 +10,8 @@ namespace OpenTween.Models
 {
     public sealed class LinkPreviewManager : IDisposable
     {
+        private const int PoolSize = 10;
+
         private readonly List<LinkPreviewForm> pool;
         private readonly Dictionary<string, int> urlToFormIndex = new();
 
@@ -22,11 +24,11 @@ namespace OpenTween.Models
         private readonly Queue<(string Url, int Version)> loadOrder = new();
         private readonly Dictionary<string, int> urlQueueVersion = new();
 
-        public LinkPreviewManager(int poolSize = 10)
+        public LinkPreviewManager()
         {
-            this.pool = new List<LinkPreviewForm>(poolSize);
-            this.freeSlots = new Queue<int>(poolSize);
-            for (var i = 0; i < poolSize; i++)
+            this.pool = new List<LinkPreviewForm>(PoolSize);
+            this.freeSlots = new Queue<int>(PoolSize);
+            for (var i = 0; i < PoolSize; i++)
             {
                 this.pool.Add(new LinkPreviewForm());
                 this.freeSlots.Enqueue(i);
