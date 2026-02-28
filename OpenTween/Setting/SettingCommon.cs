@@ -260,6 +260,9 @@ namespace OpenTween
         /// <summary>Listの発言取得に公式RTを含める</summary>
         public bool IsListsIncludeRts = true;
 
+        /// <summary>リンクプレビューをマウスが離れてから閉じるまでの遅延 (ミリ秒)</summary>
+        public int LinkPreviewMouseLeaveDelayMs = 300;
+
         public bool TabMouseLock = false;
         public bool IsUseNotifyGrowl = false;
         public bool ForceIPv4 = false;
