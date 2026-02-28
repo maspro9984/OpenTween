@@ -24,6 +24,20 @@ namespace OpenTween.Models
         private readonly Queue<(string Url, int Version)> loadOrder = new();
         private readonly Dictionary<string, int> urlQueueVersion = new();
 
+        private int mouseLeaveDelayMs = 500;
+
+        /// <summary>マウスがプレビュー外に出てから閉じるまでの遅延 (ミリ秒)</summary>
+        public int MouseLeaveDelayMs
+        {
+            get => this.mouseLeaveDelayMs;
+            set
+            {
+                this.mouseLeaveDelayMs = value;
+                foreach (var f in this.pool)
+                    f.MouseLeaveDelayMs = value;
+            }
+        }
+
         public LinkPreviewManager()
         {
             this.pool = new List<LinkPreviewForm>(PoolSize);

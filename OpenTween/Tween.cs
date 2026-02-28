@@ -331,6 +331,7 @@ namespace OpenTween
             // フォント＆文字色＆背景色保持
             this.themeManager = new(this.settings.Local);
             this.tweetDetailsView.Initialize(this, this.iconCache, this.themeManager, this.detailsHtmlBuilder, this.linkPreviewManager);
+            this.linkPreviewManager.MouseLeaveDelayMs = this.settings.Common.LinkPreviewMouseLeaveDelayMs;
 
             // sfTab は DocumentManagerTabContainer に移行済み
 

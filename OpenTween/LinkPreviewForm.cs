@@ -20,8 +20,12 @@ namespace OpenTween
         private string? pendingUrl;
         private bool webViewInitialized;
         private bool mouseEnteredOnce;
+        private DateTime? mouseLeftTime;
 
         public bool IsMouseOver { get; private set; }
+
+        /// <summary>マウスがプレビュー外に出てから閉じるまでの遅延 (ミリ秒)</summary>
+        public int MouseLeaveDelayMs { get; set; } = 300;
 
         public string? CurrentUrl => this.currentUrl;
 
@@ -176,6 +180,7 @@ namespace OpenTween
             this.AdjustSizeAndPosition(screenPos);
             this.IsMouseOver = true;
             this.mouseEnteredOnce = false;
+            this.mouseLeftTime = null;
             this.mouseCheckTimer.Start();
             this.Show();
         }
@@ -196,6 +201,7 @@ namespace OpenTween
             this.AdjustSizeAndPosition(position);
             this.IsMouseOver = true;
             this.mouseEnteredOnce = false;
+            this.mouseLeftTime = null;
             this.mouseCheckTimer.Start();
             this.Show();
         }
@@ -250,6 +256,7 @@ namespace OpenTween
             {
                 this.IsMouseOver = true;
                 this.mouseEnteredOnce = true;
+                this.mouseLeftTime = null;
             }
             else
             {
@@ -259,6 +266,17 @@ namespace OpenTween
                 if (!this.mouseEnteredOnce)
                     return;
 
+                // マウスが離れた時刻を記録し、遅延時間が経過するまで閉じない
+                if (this.mouseLeftTime == null)
+                {
+                    this.mouseLeftTime = DateTime.UtcNow;
+                    return;
+                }
+
+                if ((DateTime.UtcNow - this.mouseLeftTime.Value).TotalMilliseconds < this.MouseLeaveDelayMs)
+                    return;
+
+                this.mouseLeftTime = null;
                 this.mouseCheckTimer.Stop();
                 this.PreviewHidden?.Invoke(this, EventArgs.Empty);
                 this.HideOnly();
