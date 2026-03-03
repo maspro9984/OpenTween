@@ -98,7 +98,7 @@ namespace OpenTween.Models
         }
 
         public bool IsAnyFormMouseOver
-            => this.pool.Exists(f => f.IsMouseOver);
+            => this.pool.Exists(f => f.IsMouseOver || (f.Visible && !f.HasMouseEnteredOnce));
 
         public void HideAll()
         {
