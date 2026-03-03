@@ -24,6 +24,9 @@ namespace OpenTween
 
         public bool IsMouseOver { get; private set; }
 
+        /// <summary>マウスが一度でもプレビューフォーム上に入ったかどうか</summary>
+        public bool HasMouseEnteredOnce => this.mouseEnteredOnce;
+
         /// <summary>マウスがプレビュー外に出てから閉じるまでの遅延 (ミリ秒)</summary>
         public int MouseLeaveDelayMs { get; set; } = 300;
 
