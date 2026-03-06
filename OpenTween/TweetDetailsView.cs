@@ -131,14 +131,6 @@ namespace OpenTween
         {
             this.CurrentPost = post;
 
-            // 詳細表示したツイートのリンクをプリロード（ホバー前にキャッシュしておく）
-            var preloadUrls = post.ExpandedUrls
-                .Select(u => u.ExpandedUrl)
-                .Where(u => !string.IsNullOrEmpty(u))
-                .Where(u => !TimelineListViewDrawer.IsTwitterUserProfileUrl(u))
-                .Where(u => !IsThumbnailExpandedUrl(u));
-            this.linkPreviewManager?.Preload(preloadUrls);
-
             var loadTasks = new TaskCollection();
 
             using (ControlTransaction.Update(this.TableLayoutPanel1))
