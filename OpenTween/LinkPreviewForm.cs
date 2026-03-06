@@ -282,7 +282,7 @@ namespace OpenTween
                 this.mouseLeftTime = null;
                 this.mouseCheckTimer.Stop();
                 this.PreviewHidden?.Invoke(this, EventArgs.Empty);
-                this.HideOnly();
+                this.HidePreview();
             }
         }
 
@@ -292,24 +292,6 @@ namespace OpenTween
                 await MyCommon.OpenInBrowserAsync(this, this.currentUrl);
         }
 
-        // ページを維持したまま非表示にする（プールのキャッシュを保持するため）
-        public void HideOnly()
-        {
-            this.mouseCheckTimer.Stop();
-            this.IsMouseOver = false;
-
-            // 非表示時に動画・音声を停止してミュートする
-            if (this.webViewInitialized && this.webView.CoreWebView2 != null)
-            {
-                this.webView.CoreWebView2.IsMuted = true;
-                _ = this.webView.CoreWebView2.ExecuteScriptAsync(
-                    "document.querySelectorAll('video,audio').forEach(function(el){el.pause();});");
-            }
-
-            this.Hide();
-        }
-
-        // ページをアンロードして完全リセット（プールから追い出すときのみ使用）
         public void HidePreview()
         {
             this.mouseCheckTimer.Stop();

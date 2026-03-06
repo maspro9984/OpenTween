@@ -838,24 +838,6 @@ namespace OpenTween
             // 新着通知
             this.NotifyNewPosts(notifyPosts, soundFile, addCount, newMentionOrDm);
 
-            // ホームタブの全投稿を走査し、キャッシュが埋まるまでURLをプリロード
-            {
-                var homeTab = this.statuses.HomeTab;
-                var recentUrls = homeTab.StatusIds
-                    .Select(id => homeTab.Posts.TryGetValue(id, out var p) ? p : null)
-                    .Where(p => p != null)
-                    .SelectMany(p => p!.ExpandedUrls)
-                    .Select(u => u.ExpandedUrl)
-                    .Where(u => !string.IsNullOrEmpty(u))
-                    .Where(u => !TimelineListViewDrawer.IsTwitterUserProfileUrl(u))
-                    .Where(u => !TweetDetailsView.IsThumbnailExpandedUrl(u))
-                    .Distinct()
-                    .Take(10)
-                    .ToList();
-                System.Diagnostics.Debug.WriteLine($"[LinkPreview] Preload: 投稿数={homeTab.AllCount}, 対象URL({recentUrls.Count}件): {string.Join(", ", recentUrls)}");
-                this.linkPreviewManager.Preload(recentUrls);
-            }
-
             this.SetMainWindowTitle();
             if (!this.StatusLabelUrl.Text.StartsWith("http", StringComparison.Ordinal)) this.SetStatusLabelUrl();
 
