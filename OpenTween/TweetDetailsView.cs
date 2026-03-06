@@ -616,6 +616,10 @@ namespace OpenTween
             if (this.pendingPreviewUrl == null)
                 return;
 
+            // タイマー発火時にまだ同じリンク上にマウスがあるか確認（かすっただけの場合を除外）
+            if (this.PostBrowser.StatusText != this.pendingPreviewUrl)
+                return;
+
             // PostBrowser の StatusText は t.co 短縮URLなので展開済みURLに変換してからキャッシュを検索する
             var url = this.CurrentPost?.GetExpandedUrl(this.pendingPreviewUrl) ?? this.pendingPreviewUrl;
             this.linkPreviewManager?.ShowPreview(url, Cursor.Position);
