@@ -22,6 +22,10 @@ namespace OpenTween.Models
             }
         }
 
+        /// <summary>非表示のままURLを先行読み込みする</summary>
+        public void Prefetch(string url)
+            => this.form.Prefetch(url);
+
         public void ShowPreview(string url, Point screenPos)
         {
             if (this.form.Visible && this.form.CurrentUrl == url)

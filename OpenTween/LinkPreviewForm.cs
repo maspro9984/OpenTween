@@ -196,14 +196,26 @@ namespace OpenTween
             this.Show();
         }
 
+        /// <summary>非表示のままURLを先行読み込みする</summary>
+        public void Prefetch(string url)
+        {
+            if (url == this.currentUrl)
+                return;
+
+            this.currentUrl = url;
+            this.NavigateTo(url);
+        }
+
         public void ShowPreview(string url, Point position)
         {
             if (url == this.currentUrl && this.Visible)
                 return;
 
+            var needsNavigate = url != this.currentUrl;
             this.currentUrl = url;
             this.urlLabel.Text = url;
-            this.NavigateTo(url);
+            if (needsNavigate)
+                this.NavigateTo(url);
 
             // 表示時にミュートを解除する
             if (this.webViewInitialized && this.webView.CoreWebView2 != null)
