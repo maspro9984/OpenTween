@@ -2,6 +2,7 @@
 
 using System;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Web.WebView2.Core;
@@ -11,6 +12,13 @@ namespace OpenTween
 {
     public class LinkPreviewForm : Form
     {
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
+
+        private const int VK_LBUTTON = 0x01;
+        private const int VK_RBUTTON = 0x02;
+        private const int VK_MBUTTON = 0x04;
+
         private readonly WebView2 webView;
         private readonly Panel toolBar;
         private readonly Label urlLabel;
@@ -255,6 +263,23 @@ namespace OpenTween
             }
 
             var cursorPos = Cursor.Position;
+
+            // ウィンドウ外でマウスボタンが押されたら閉じる
+            if (!this.Bounds.Contains(cursorPos))
+            {
+                var lButton = GetAsyncKeyState(VK_LBUTTON);
+                var rButton = GetAsyncKeyState(VK_RBUTTON);
+                var mButton = GetAsyncKeyState(VK_MBUTTON);
+                if ((lButton & 0x8000) != 0 || (rButton & 0x8000) != 0 || (mButton & 0x8000) != 0)
+                {
+                    this.mouseLeftTime = null;
+                    this.mouseCheckTimer.Stop();
+                    this.PreviewHidden?.Invoke(this, EventArgs.Empty);
+                    this.HidePreview();
+                    return;
+                }
+            }
+
             if (this.Bounds.Contains(cursorPos))
             {
                 this.IsMouseOver = true;
