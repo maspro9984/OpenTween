@@ -27,8 +27,10 @@ namespace OpenTween
         private string? currentUrl;
         private string? pendingUrl;
         private bool webViewInitialized;
+        private bool webViewInitStarted;
         private bool mouseEnteredOnce;
         private DateTime? mouseLeftTime;
+        private DateTime showedAt;
 
         public bool IsMouseOver { get; private set; }
 
@@ -97,33 +99,67 @@ namespace OpenTween
             this.mouseCheckTimer.Tick += this.MouseCheckTimer_Tick;
 
             this.SetStyle(ControlStyles.Selectable, true);
-
-            _ = this.InitializeWebViewAsync();
         }
 
-        private async Task InitializeWebViewAsync()
+        /// <summary>WebView2 の初期化を開始する（フォーム表示時に呼ばれる）</summary>
+        private async Task EnsureWebViewInitializedAsync()
         {
+            if (this.webViewInitStarted)
+                return;
+
+            this.webViewInitStarted = true;
+
             try
             {
+                var options = new CoreWebView2EnvironmentOptions
+                {
+                    // 仮想化環境（Parallel Desktop 等）で GPU レンダリングが動作しない場合に
+                    // ソフトウェアレンダリングにフォールバックする
+                    AdditionalBrowserArguments = "--disable-gpu --disable-gpu-compositing --disable-gpu-sandbox --use-gl=swiftshader",
+                };
                 var env = await CoreWebView2Environment.CreateAsync(
+                    browserExecutableFolder: null,
                     userDataFolder: System.IO.Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                         "OpenTween",
                         "WebView2"
-                    )
+                    ),
+                    options: options
                 );
                 await this.webView.EnsureCoreWebView2Async(env);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // WebView2 ランタイムが未インストールの場合など
+                // WebView2 ランタイムが未インストールの場合など — 原因が分かるよう表示する
+                var errorLabel = new Label
+                {
+                    Text = $"WebView2 初期化失敗: {ex.GetType().Name}: {ex.Message}",
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    ForeColor = Color.Red,
+                    BackColor = SystemColors.Control,
+                };
+                this.Controls.Remove(this.webView);
+                this.Controls.Add(errorLabel);
             }
         }
 
         private void WebView_CoreWebView2InitializationCompleted(object? sender, CoreWebView2InitializationCompletedEventArgs e)
         {
             if (!e.IsSuccess)
+            {
+                var errorLabel = new Label
+                {
+                    Text = $"WebView2 初期化失敗: {e.InitializationException?.GetType().Name}: {e.InitializationException?.Message}",
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleCenter,
+                    ForeColor = Color.Red,
+                    BackColor = SystemColors.Control,
+                };
+                this.Controls.Remove(this.webView);
+                this.Controls.Add(errorLabel);
                 return;
+            }
 
             this.webViewInitialized = true;
 
@@ -192,6 +228,7 @@ namespace OpenTween
             this.IsMouseOver = true;
             this.mouseEnteredOnce = false;
             this.mouseLeftTime = null;
+            this.showedAt = DateTime.UtcNow;
             this.mouseCheckTimer.Start();
             this.Show();
         }
@@ -199,11 +236,9 @@ namespace OpenTween
         /// <summary>非表示のままURLを先行読み込みする</summary>
         public void Prefetch(string url)
         {
-            if (url == this.currentUrl)
-                return;
-
-            this.currentUrl = url;
-            this.NavigateTo(url);
+            // 仮想化環境では非表示中のナビゲーションで描画が停止するため、
+            // URL を記録するだけにして実際のナビゲーションは ShowPreview 時に行う
+            this.pendingUrl = url;
         }
 
         public void ShowPreview(string url, Point position)
@@ -211,22 +246,31 @@ namespace OpenTween
             if (url == this.currentUrl && this.Visible)
                 return;
 
-            var needsNavigate = url != this.currentUrl;
             this.currentUrl = url;
             this.urlLabel.Text = url;
-            if (needsNavigate)
-                this.NavigateTo(url);
-
-            // 表示時にミュートを解除する
-            if (this.webViewInitialized && this.webView.CoreWebView2 != null)
-                this.webView.CoreWebView2.IsMuted = false;
 
             this.AdjustSizeAndPosition(position);
             this.IsMouseOver = true;
             this.mouseEnteredOnce = false;
             this.mouseLeftTime = null;
+            this.showedAt = DateTime.UtcNow;
             this.mouseCheckTimer.Start();
+
+            // フォームを先に表示してから WebView2 を初期化・ナビゲーションする
+            // (非表示状態での初期化/ナビゲーションは仮想化環境で描画が動作しない)
             this.Show();
+
+            // 表示時にミュートを解除する
+            if (this.webViewInitialized && this.webView.CoreWebView2 != null)
+            {
+                this.webView.CoreWebView2.IsMuted = false;
+                this.webView.CoreWebView2.Navigate(url);
+            }
+            else
+            {
+                this.pendingUrl = url;
+                _ = this.EnsureWebViewInitializedAsync();
+            }
         }
 
         private void NavigateTo(string url)
@@ -245,8 +289,12 @@ namespace OpenTween
         {
             var screen = Screen.FromPoint(cursorPosition).WorkingArea;
 
-            var width = Math.Min((int)(screen.Width * 0.715), 1144);
-            var height = Math.Min((int)(screen.Height * 0.9), 1080);
+            // 仮想化環境（Parallel Desktop 等）で WorkingArea が不正な値を返す場合のフォールバック
+            if (screen.Width < 400 || screen.Height < 300)
+                screen = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 720);
+
+            var width = Math.Max(400, (int)(screen.Width * 0.715));
+            var height = Math.Max(300, (int)(screen.Height * 0.9));
 
             this.Size = new Size(width, height);
 
@@ -263,6 +311,10 @@ namespace OpenTween
             if (y + this.Height > screen.Bottom)
                 y = screen.Bottom - this.Height;
 
+            // 画面範囲内に収める（仮想化環境での座標ずれ対策）
+            x = Math.Max(screen.Left, Math.Min(x, screen.Right - this.Width));
+            y = Math.Max(screen.Top, Math.Min(y, screen.Bottom - this.Height));
+
             this.Location = new Point(x, y);
         }
 
@@ -277,7 +329,9 @@ namespace OpenTween
             var cursorPos = Cursor.Position;
 
             // ウィンドウ外でマウスボタンが押されたら閉じる
-            if (!this.Bounds.Contains(cursorPos))
+            // ただし表示直後（500ms以内）はボタン状態を確認しない（仮想化環境での誤閉じ対策）
+            if (!this.Bounds.Contains(cursorPos) &&
+                (DateTime.UtcNow - this.showedAt).TotalMilliseconds >= 500)
             {
                 var lButton = GetAsyncKeyState(VK_LBUTTON);
                 var rButton = GetAsyncKeyState(VK_RBUTTON);

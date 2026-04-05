@@ -147,6 +147,14 @@ namespace OpenTween
         {
             var screen = Screen.FromPoint(cursorPosition).WorkingArea;
 
+            // 高DPI 環境では画面の物理ピクセル数が大きいため、
+            // DPI スケールファクターまでは拡大を許可する
+            float dpiScale;
+            using (var g = this.CreateGraphics())
+            {
+                dpiScale = g.DpiX / 96f;
+            }
+
             // 画面サイズの60%を上限
             var maxWidth = (int)(screen.Width * 0.6);
             var maxHeight = (int)(screen.Height * 0.6);
@@ -157,8 +165,8 @@ namespace OpenTween
                 (double)maxHeight / imageSize.Height
             );
 
-            // 元画像より拡大はしない
-            scale = Math.Min(scale, 1.0);
+            // DPI スケール倍までは拡大を許可する（等倍では高DPI環境で小さすぎる）
+            scale = Math.Min(scale, dpiScale);
 
             // 小さすぎる場合は最低サイズを確保
             var width = Math.Max((int)(imageSize.Width * scale), 200);
