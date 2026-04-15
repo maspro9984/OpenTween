@@ -96,6 +96,9 @@ namespace OpenTween
         private System.Windows.Forms.Timer? linkHoverTimer;
         private System.Windows.Forms.Timer? linkHideDelayTimer;
         private string? pendingPreviewUrl;
+        private TweetDetailsPopupForm? detailsPopupForm;
+        private System.Windows.Forms.Timer? labelHoverTimer;
+        private System.Windows.Forms.Timer? labelHideDelayTimer;
 
         public TweetDetailsView()
         {
@@ -1275,6 +1278,66 @@ namespace OpenTween
                 await MyCommon.OpenInBrowserAsync(this, postUri);
         }
 
+        private void DateTimeLabel_MouseEnter(object sender, EventArgs e)
+        {
+            if (this.CurrentPost == null)
+                return;
+
+            this.labelHideDelayTimer?.Stop();
+
+            this.labelHoverTimer?.Stop();
+            this.labelHoverTimer?.Dispose();
+            this.labelHoverTimer = new System.Windows.Forms.Timer { Interval = 500 };
+            this.labelHoverTimer.Tick += this.LabelHoverTimer_Tick;
+            this.labelHoverTimer.Start();
+        }
+
+        private void DateTimeLabel_MouseLeave(object sender, EventArgs e)
+        {
+            this.labelHoverTimer?.Stop();
+
+            this.labelHideDelayTimer?.Stop();
+            this.labelHideDelayTimer?.Dispose();
+            this.labelHideDelayTimer = new System.Windows.Forms.Timer { Interval = 200 };
+            this.labelHideDelayTimer.Tick += this.LabelHideDelayTimer_Tick;
+            this.labelHideDelayTimer.Start();
+        }
+
+        private void LabelHoverTimer_Tick(object? sender, EventArgs e)
+        {
+            this.labelHoverTimer?.Stop();
+
+            if (this.CurrentPost == null)
+                return;
+
+            // マウスがまだ DateTimeLabel 上にあるか確認（かすっただけの場合を除外）
+            var labelScreenBounds = this.DateTimeLabel.RectangleToScreen(this.DateTimeLabel.ClientRectangle);
+            if (!labelScreenBounds.Contains(Cursor.Position))
+                return;
+
+            var html = this.PostBrowser.DocumentText;
+            if (MyCommon.IsNullOrEmpty(html))
+                return;
+
+            this.detailsPopupForm ??= new TweetDetailsPopupForm();
+            this.detailsPopupForm.ShowPopup(
+                html,
+                this.NameLinkLabel.Text,
+                this.DateTimeLabel.Text,
+                this.SourceLinkLabel.Text,
+                Cursor.Position);
+        }
+
+        private void LabelHideDelayTimer_Tick(object? sender, EventArgs e)
+        {
+            this.labelHideDelayTimer?.Stop();
+
+            // マウスがポップアップ上にある場合は閉じない
+            if (this.detailsPopupForm != null && this.detailsPopupForm.IsMouseOver)
+                return;
+
+            this.detailsPopupForm?.HidePopup();
+        }
     }
 
     public class TweetDetailsViewStatusChengedEventArgs : EventArgs
