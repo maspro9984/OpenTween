@@ -18,6 +18,9 @@
                 components?.Dispose();
                 this.linkHoverTimer?.Dispose();
                 this.linkHideDelayTimer?.Dispose();
+                this.labelHoverTimer?.Dispose();
+                this.labelHideDelayTimer?.Dispose();
+                this.detailsPopupForm?.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -411,6 +414,8 @@
             this.DateTimeLabel.Name = "DateTimeLabel";
             this.DateTimeLabel.TabStop = true;
             this.DateTimeLabel.LinkClicked += new System.Windows.Forms.LinkLabelLinkClickedEventHandler(this.DateTimeLabel_LinkClicked);
+            this.DateTimeLabel.MouseEnter += new System.EventHandler(this.DateTimeLabel_MouseEnter);
+            this.DateTimeLabel.MouseLeave += new System.EventHandler(this.DateTimeLabel_MouseLeave);
             // 
             // SourceLinkLabel
             // 
