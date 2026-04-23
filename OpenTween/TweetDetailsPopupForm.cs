@@ -36,6 +36,9 @@ namespace OpenTween
         /// <summary>マウスが外に出てから閉じるまでの遅延 (ミリ秒)</summary>
         public int MouseLeaveDelayMs { get; set; } = 300;
 
+        /// <summary>ポップアップ内のリンクがクリックされた際に発生する</summary>
+        public event EventHandler<WebBrowserNavigatingEventArgs>? LinkClicked;
+
         public TweetDetailsPopupForm()
         {
             this.FormBorderStyle = FormBorderStyle.FixedToolWindow;
@@ -93,6 +96,7 @@ namespace OpenTween
                 WebBrowserShortcutsEnabled = false,
                 ScriptErrorsSuppressed = true,
             };
+            this.webBrowser.Navigating += this.WebBrowser_Navigating;
 
             this.Controls.Add(this.webBrowser);
             this.Controls.Add(this.headerPanel);
@@ -111,23 +115,50 @@ namespace OpenTween
             }
         }
 
+        protected override bool ShowWithoutActivation => true;
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            // ユーザー操作による閉じる (×ボタン等) の場合は破棄せず、非表示にとどめて再利用する
+            if (e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true;
+                this.HidePopup();
+                return;
+            }
+
+            base.OnFormClosing(e);
+        }
+
         public void ShowPopup(string html, string name, string date, string source, Point screenPos)
         {
             this.nameLabel.Text = name;
             this.dateLabel.Text = date;
             this.sourceLabel.Text = source;
 
+            this.AdjustSizeAndPosition(screenPos);
+
+            // WebBrowser の ActiveX は Form のハンドル生成後でなければ初期化されないため、
+            // DocumentText を設定する前にフォームを表示する必要がある。
+            if (!this.Visible)
+                this.Show();
+
             this.webBrowser.DocumentText = html;
 
-            this.AdjustSizeAndPosition(screenPos);
             this.IsMouseOver = true;
             this.mouseEnteredOnce = false;
             this.mouseLeftTime = null;
             this.showedAt = DateTime.UtcNow;
             this.mouseCheckTimer.Start();
+        }
 
-            if (!this.Visible)
-                this.Show();
+        /// <summary>表示位置・サイズは変更せず、表示内容のみ差し替える</summary>
+        public void UpdateContent(string html, string name, string date, string source)
+        {
+            this.nameLabel.Text = name;
+            this.dateLabel.Text = date;
+            this.sourceLabel.Text = source;
+            this.webBrowser.DocumentText = html;
         }
 
         private void AdjustSizeAndPosition(Point cursorPosition)
@@ -208,6 +239,19 @@ namespace OpenTween
 
                 this.HidePopup();
             }
+        }
+
+        private void WebBrowser_Navigating(object? sender, WebBrowserNavigatingEventArgs e)
+        {
+            // DocumentText 設定による about:blank への遷移は通常のドキュメント読み込みなので許可する
+            if (e.Url.AbsoluteUri == "about:blank")
+                return;
+
+            // ポップアップ内で直接遷移させると //opentween/... のような内部URLが
+            // ブラウザコンポーネントに解釈できずURLが生テキストとして表示されてしまう。
+            // 常にキャンセルし、呼び出し元にURLの処理を委譲する。
+            e.Cancel = true;
+            this.LinkClicked?.Invoke(this, e);
         }
 
         public void HidePopup()

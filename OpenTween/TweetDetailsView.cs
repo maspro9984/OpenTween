@@ -430,11 +430,13 @@ namespace OpenTween
         internal static string FormatQuoteTweetHtml(PostId statusId, string innerHtml, bool isReply)
         {
             var blockClassName = "quote-tweet";
+            // 引用ツイートは関連発言タブで開く (/status/)、リプライ元は現在の詳細ビューで表示する (/show/)
+            var urlPath = isReply ? "show" : "status";
 
             if (isReply)
                 blockClassName += " reply";
 
-            return $"""<a class="quote-tweet-link" href="//opentween/status/{statusId.Id}">""" +
+            return $"""<a class="quote-tweet-link" href="//opentween/{urlPath}/{statusId.Id}">""" +
                 $"""<blockquote class="{blockClassName}">{innerHtml}</blockquote>""" +
                 "</a>";
         }
@@ -1319,7 +1321,12 @@ namespace OpenTween
             if (MyCommon.IsNullOrEmpty(html))
                 return;
 
-            this.detailsPopupForm ??= new TweetDetailsPopupForm();
+            if (this.detailsPopupForm == null || this.detailsPopupForm.IsDisposed)
+            {
+                this.detailsPopupForm = new TweetDetailsPopupForm();
+                this.detailsPopupForm.LinkClicked += this.DetailsPopupForm_LinkClicked;
+            }
+
             this.detailsPopupForm.ShowPopup(
                 html,
                 this.NameLinkLabel.Text,
@@ -1337,6 +1344,103 @@ namespace OpenTween
                 return;
 
             this.detailsPopupForm?.HidePopup();
+        }
+
+        private async void DetailsPopupForm_LinkClicked(object? sender, WebBrowserNavigatingEventArgs e)
+        {
+            if (this.detailsPopupForm == null)
+                return;
+
+            // ポップアップ内の引用/リプライ元リンクはポップアップ内で表示を切り替える
+            if (e.Url.Authority == "opentween")
+            {
+                var m = Regex.Match(e.Url.AbsolutePath, @"^/(?:status|show)/(\d+)$");
+                if (m.Success)
+                {
+                    var statusId = new TwitterStatusId(m.Groups[1].Value);
+                    await this.ShowPostInPopup(statusId);
+                    return;
+                }
+            }
+
+            // 外部URLなどポップアップ内で展開しないものは既存のフロー (外部ブラウザ等) に委譲する
+            await this.Owner.OpenUriAsync(e.Url, MyCommon.IsKeyDown(Keys.Control));
+        }
+
+        private async Task ShowPostInPopup(PostId statusId)
+        {
+            if (this.detailsPopupForm == null)
+                return;
+
+            var post = TabInformations.GetInstance()[statusId];
+            if (post == null)
+            {
+                var account = this.Owner.GetAccountForPostId(statusId);
+                if (account == null)
+                    return;
+
+                try
+                {
+                    post = await account.Client.GetPostById(statusId, firstLoad: false).ConfigureAwait(true);
+                }
+                catch (WebApiException)
+                {
+                    return;
+                }
+
+                if (!TabInformations.GetInstance().AddQuoteTweet(post))
+                    return;
+            }
+
+            var nameText = BuildNameText(post);
+            var dateText = post.CreatedAt.ToLocalTimeString();
+            var sourceText = post.Source ?? "";
+
+            // リプライ/引用リンクも含めた本文を構築 (ShowPostDetails と同様)
+            var quoteStatusIds = post.QuoteStatusIds;
+            var loadingQuoteHtml = string.Concat(quoteStatusIds.Select(x => FormatQuoteTweetHtml(x, Properties.Resources.LoadingText, isReply: false)));
+            var loadingReplyHtml = post.InReplyToStatusId != null
+                ? FormatQuoteTweetHtml(post.InReplyToStatusId, Properties.Resources.LoadingText, isReply: true)
+                : string.Empty;
+
+            var bodyText = post.IsDeleted ? "(DELETED)" : post.Text;
+            var body = bodyText + loadingQuoteHtml + loadingReplyHtml;
+
+            if (this.detailsPopupForm == null || !this.detailsPopupForm.Visible)
+                return;
+
+            this.detailsPopupForm.UpdateContent(this.HtmlBuilder.Build(body), nameText, dateText, sourceText);
+
+            // 引用/リプライ元の中身を非同期に読み込んで再表示
+            if (quoteStatusIds.Length == 0 && post.InReplyToStatusId == null)
+                return;
+
+            var loadTasks = quoteStatusIds.Select(x => this.CreateQuoteTweetHtml(x, isReply: false)).ToList();
+            if (post.InReplyToStatusId != null)
+                loadTasks.Add(this.CreateQuoteTweetHtml(post.InReplyToStatusId, isReply: true));
+
+            var quoteHtmls = await Task.WhenAll(loadTasks).ConfigureAwait(true);
+
+            if (this.detailsPopupForm == null || !this.detailsPopupForm.Visible)
+                return;
+
+            body = bodyText + string.Concat(quoteHtmls);
+            this.detailsPopupForm.UpdateContent(this.HtmlBuilder.Build(body), nameText, dateText, sourceText);
+        }
+
+        private static string BuildNameText(PostClass post)
+        {
+            string nameText;
+            if (post.IsDm)
+                nameText = post.IsOwl ? "DM FROM <- " : "DM TO -> ";
+            else
+                nameText = "";
+
+            if (post.RetweetedId != null)
+                nameText += $"(RT:{post.RetweetedBy}) ";
+
+            nameText += post.ScreenName + "/" + post.Nickname;
+            return nameText;
         }
     }
 
