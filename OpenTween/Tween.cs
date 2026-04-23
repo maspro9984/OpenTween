@@ -7264,6 +7264,42 @@ namespace OpenTween
                 await this.OpenRelatedTab(statusId);
                 return;
             }
+
+            // リプライ元などを現在の詳細ビュー内で表示する (//opentween/show/:status_id)
+            var showMatch = Regex.Match(uri.AbsolutePath, @"^/show/(\d+)$");
+            if (showMatch.Success)
+            {
+                var statusId = new TwitterStatusId(showMatch.Groups[1].Value);
+                await this.ShowPostOnDetailsView(statusId);
+                return;
+            }
+        }
+
+        /// <summary>
+        /// 指定されたツイートを現在の発言詳細ビューに表示します
+        /// </summary>
+        /// <param name="statusId">表示するツイートのID</param>
+        private async Task ShowPostOnDetailsView(PostId statusId)
+        {
+            var post = this.statuses[statusId];
+            if (post == null)
+            {
+                var account = this.GetAccountForPostId(statusId);
+                if (account == null)
+                    return;
+
+                try
+                {
+                    post = await account.Client.GetPostById(statusId, firstLoad: false);
+                }
+                catch (WebApiException ex)
+                {
+                    this.StatusLabel.Text = $"Err:{ex.Message}(GetStatus)";
+                    return;
+                }
+            }
+
+            await this.tweetDetailsView.ShowPostDetails(post);
         }
 
         private void ListTabSelect(string tabName)

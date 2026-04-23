@@ -72,7 +72,8 @@ namespace OpenTween
         public void FormatQuoteTweetHtml_ReplyHtmlTest()
         {
             // blockquote の class に reply が付与される
-            var expected = """<a class="quote-tweet-link" href="//opentween/status/12345">""" +
+            // リプライ元リンクは現在の詳細ビューで表示するため /show/ を使用する
+            var expected = """<a class="quote-tweet-link" href="//opentween/show/12345">""" +
                 """<blockquote class="quote-tweet reply">hogehoge</blockquote>""" +
                 "</a>";
             Assert.Equal(expected, TweetDetailsView.FormatQuoteTweetHtml(new TwitterStatusId("12345"), "hogehoge", isReply: true));
