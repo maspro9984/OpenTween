@@ -165,6 +165,21 @@ namespace OpenTween.Api.GraphQL
         }
 
         [Fact]
+        public void ToStatus_WithTwitterPostFactory_QuotedTweet_Unavailable_Test()
+        {
+            // 引用元が削除・凍結・非公開などで参照できず __typename が TweetUnavailable の場合
+            var rootElm = this.LoadResponseDocument("TimelineTweet_QuotedTweet_Unavailable.json");
+            var timelineTweet = new TimelineTweet(rootElm);
+            var status = timelineTweet.ToTwitterStatus();
+            var postFactory = new TwitterPostFactory(this.CreateTabInfo(), new());
+            var post = postFactory.CreateFromStatus(status, selfUserId: new("1"), new HashSet<PersonId>(), firstLoad: false);
+
+            Assert.Equal("1614653321310253057", post.StatusId.Id);
+            var quotedPostId = Assert.Single(post.QuoteStatusIds);
+            Assert.Equal("1614650279194136576", quotedPostId.Id);
+        }
+
+        [Fact]
         public void ToStatus_WithTwitterPostFactory_PromotedTweet_Test()
         {
             var rootElm = this.LoadResponseDocument("TimelineTweet_PromotedTweet.json");

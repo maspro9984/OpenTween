@@ -123,7 +123,11 @@ namespace OpenTween.Api.GraphQL
             var user = new TwitterGraphqlUser(userElm);
             var quotedTweetElm = tweetElm.Element("quoted_status_result")?.Element("result") ?? null;
             var quotedStatusPermalink = tweetLegacyElm.Element("quoted_status_permalink") ?? null;
-            var isQuotedTweetTombstone = quotedTweetElm != null && GetTweetTypeName(quotedTweetElm) == "TweetTombstone";
+
+            // 引用元が削除・凍結・非公開などで参照できない場合、__typename が Tweet 以外
+            // （TweetTombstone や TweetUnavailable 等）になる。その場合は引用ツイートを展開しない
+            var isQuotedTweetAvailable = quotedTweetElm != null
+                && GetTweetTypeName(quotedTweetElm) is "Tweet" or "TweetWithVisibilityResults";
 
             // note_tweet: 長文ツイート（280文字超）のフルテキストとエンティティ
             var noteTweetElm = tweetElm.XPathSelectElement("note_tweet/note_tweet_results/result");
@@ -195,7 +199,7 @@ namespace OpenTween.Api.GraphQL
                 User = user.ToTwitterUser(),
                 RetweetedStatus = retweetedTweetElm != null ? TimelineTweet.ParseTweetUnion(retweetedTweetElm) : null,
                 IsQuoteStatus = GetTextOrNull(tweetLegacyElm, "is_quote_status") == "true",
-                QuotedStatus = quotedTweetElm != null && !isQuotedTweetTombstone ? TimelineTweet.ParseTweetUnion(quotedTweetElm) : null,
+                QuotedStatus = isQuotedTweetAvailable ? TimelineTweet.ParseTweetUnion(quotedTweetElm!) : null,
                 QuotedStatusIdStr = GetTextOrNull(tweetLegacyElm, "quoted_status_id_str"),
                 QuotedStatusPermalink = quotedStatusPermalink == null ? null : new()
                 {
