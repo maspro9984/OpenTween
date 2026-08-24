@@ -644,6 +644,11 @@ namespace OpenTween
             if (this.PostBrowser.StatusText != this.pendingPreviewUrl)
                 return;
 
+            // StatusText はマウスがコントロール外へ出ても空に戻らないことがあるため、
+            // カーソルが実際に PostBrowser 内のリンク上にあることも確認する
+            if (!this.IsCursorOnLink())
+                return;
+
             // PostBrowser の StatusText は t.co 短縮URLなので展開済みURLに変換してからキャッシュを検索する
             var url = this.CurrentPost?.GetExpandedUrl(this.pendingPreviewUrl) ?? this.pendingPreviewUrl;
             this.linkPreviewManager?.ShowPreview(url, Cursor.Position);
@@ -658,6 +663,32 @@ namespace OpenTween
                 return;
 
             this.linkPreviewManager?.HideAll();
+        }
+
+        /// <summary>マウスカーソルが PostBrowser 内のリンク (a 要素) 上にあるかを判定する</summary>
+        private bool IsCursorOnLink()
+        {
+            var clientPos = this.PostBrowser.PointToClient(Cursor.Position);
+            if (!this.PostBrowser.ClientRectangle.Contains(clientPos))
+                return false;
+
+            try
+            {
+                var element = this.PostBrowser.Document?.GetElementFromPoint(clientPos);
+                while (element != null)
+                {
+                    if (string.Equals(element.TagName, "A", StringComparison.OrdinalIgnoreCase))
+                        return true;
+
+                    element = element.Parent;
+                }
+            }
+            catch (Exception)
+            {
+                // Document へのアクセスに失敗した場合は判定不能のため表示しない
+            }
+
+            return false;
         }
 
         private bool IsThumbnailUrl(string url)
