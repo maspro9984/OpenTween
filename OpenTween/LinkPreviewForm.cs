@@ -293,8 +293,8 @@ namespace OpenTween
             if (screen.Width < 400 || screen.Height < 300)
                 screen = Screen.PrimaryScreen?.WorkingArea ?? new Rectangle(0, 0, 1280, 720);
 
-            var width = Math.Max(400, (int)(screen.Width * 0.715));
-            var height = Math.Max(300, (int)(screen.Height * 0.9));
+            var width = Math.Max(400, Math.Min((int)(screen.Width * 0.715), 1144));
+            var height = Math.Max(300, Math.Min((int)(screen.Height * 0.9), 1080));
 
             this.Size = new Size(width, height);
 

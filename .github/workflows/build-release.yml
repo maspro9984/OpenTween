@@ -1,0 +1,55 @@
+# 自動ビルド & リリース（OpenTween / .NET Framework 4.8）
+#
+# 既存の build.yml / package.yml は成果物を「Artifact」に出すため MasUpdater からは見えない。
+# このワークフローは develop / my-develop への push で Release ビルドを作り、同梱の zip スクリプトで
+# OpenTween.zip を作成して「GitHub Release」に添付する（MasUpdater が検知できるようにする）。
+# タグは既存の版タグ(v3.x 等)と衝突しないよう build-<ビルド番号> を使う。
+name: build-release
+
+on:
+  push:
+    branches: [ develop, my-develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add msbuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.nuget/packages
+          key: nuget-${{ hashFiles('*/*.csproj') }}
+          restore-keys: |
+            nuget-
+
+      - name: Build (Release)
+        shell: pwsh
+        run: msbuild /target:restore,build /p:Configuration=Release /p:DebugType=None /verbosity:minimal
+
+      - name: Package (reproducible zip)
+        shell: powershell # runtime-version を取得するため従来の PowerShell を使用
+        run: |
+          # zip スクリプトが csc.exe のバージョンを参照するため Roslyn のパスを通す（package.yml と同じ）
+          $env:PATH = $env:PATH + ';C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Msbuild\Current\Bin\Roslyn\'
+          $binDir = '.\OpenTween\bin\Release\net48\'
+          .\tools\build-zip-archive.ps1 -BinDir $binDir -DestPath 'OpenTween.zip'
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: build-${{ github.run_number }}
+          body: |
+            自動ビルド (commit ${{ github.sha }})
+          files: OpenTween.zip
