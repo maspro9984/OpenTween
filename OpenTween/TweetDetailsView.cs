@@ -238,25 +238,6 @@ namespace OpenTween
             loadTasks.Add(() => this.AppendQuoteTweetAsync(post));
 
             await loadTasks.RunAll();
-
-            // 最初の非サムネイルリンクを先行読み込み
-            this.PrefetchFirstLink(post);
-        }
-
-        private void PrefetchFirstLink(PostClass post)
-        {
-            if (this.linkPreviewManager == null)
-                return;
-
-            foreach (var urlInfo in post.ExpandedUrls)
-            {
-                var expandedUrl = urlInfo.ExpandedUrl;
-                if (!IsThumbnailExpandedUrl(expandedUrl))
-                {
-                    this.linkPreviewManager.Prefetch(expandedUrl);
-                    return;
-                }
-            }
         }
 
         public void ScrollDownPostBrowser(bool forward)

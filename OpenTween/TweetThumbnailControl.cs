@@ -24,14 +24,12 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using OpenTween.Connection;
 using OpenTween.Models;
 using OpenTween.Thumbnail;
 
@@ -44,7 +42,6 @@ namespace OpenTween
         private Timer? hoverTimer;
         private Timer? hideDelayTimer;
         private ThumbnailImageCache? imageCache;
-        private System.Threading.CancellationTokenSource? preloadCts;
 
         [Browsable(false)]
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
@@ -84,8 +81,6 @@ namespace OpenTween
                 this.hoverTimer?.Dispose();
                 this.hideDelayTimer?.Dispose();
                 this.previewForm?.Dispose();
-                this.preloadCts?.Cancel();
-                this.preloadCts?.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -120,11 +115,6 @@ namespace OpenTween
                     this.scrollBar.Value = 0;
                     this.scrollBar.Maximum = this.Model.Thumbnails.Length - 1;
                 }
-
-                // フルサイズ画像をバックグラウンドでプリロード
-                this.preloadCts?.Cancel();
-                this.preloadCts = new System.Threading.CancellationTokenSource();
-                _ = this.PreloadFullSizeImagesAsync(this.preloadCts.Token);
             }
             else
             {
@@ -132,48 +122,6 @@ namespace OpenTween
                 this.pictureBox.AccessibleDescription = "";
                 this.toolTip.SetToolTip(this.pictureBox, "");
                 this.scrollBar.Visible = false;
-            }
-        }
-
-        private async Task PreloadFullSizeImagesAsync(System.Threading.CancellationToken token)
-        {
-            if (this.imageCache == null || !this.Model.ThumbnailAvailable)
-                return;
-
-            foreach (var thumbnail in this.Model.Thumbnails)
-            {
-                var url = thumbnail.FullSizeImageUrl ?? thumbnail.ThumbnailImageUrl;
-                if (url == null)
-                    continue;
-
-                if (this.imageCache.TryGet(url) != null)
-                {
-                    Debug.WriteLine($"[ThumbnailCache] Preload SKIP(キャッシュ済み): {url}");
-                    continue;
-                }
-
-                Debug.WriteLine($"[ThumbnailCache] Preload 開始: {url}");
-                try
-                {
-                    var loader = new SimpleThumbnailLoader(url);
-
-                    // ConfigureAwait(true) でUIスレッドに戻ってから Store を呼ぶ
-                    var image = await Task.Run(() => loader.Load(Networking.Http, token), token)
-                        .ConfigureAwait(true);
-
-                    if (token.IsCancellationRequested)
-                        break;
-
-                    this.imageCache.Store(url, image);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[ThumbnailCache] Preload 失敗: {ex.Message}");
-                }
             }
         }
 
