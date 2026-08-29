@@ -28,6 +28,9 @@ namespace OpenTween.Controls
         /// <summary>タブ名 → コンテンツコントロール（レイアウト復元後の再配置用）</summary>
         private readonly Dictionary<string, Control> tabPanelContents = new();
 
+        /// <summary>タブ名 → 未読表示状態（不要な再描画を避けるため変化時のみ Appearance を更新する）</summary>
+        private readonly Dictionary<string, bool> tabUnreadStates = new();
+
         private bool suppressEvents;
 
         /// <summary>タイムラインタブのコンテナパネル参照</summary>
@@ -188,6 +191,7 @@ namespace OpenTween.Controls
 
                 this.tabMap.Remove(tabName);
                 this.tabPanelContents.Remove(tabName);
+                this.tabUnreadStates.Remove(tabName);
                 this.tabOrder.Remove(tabName);
 
                 if (this.tabMap.Count == 0)
@@ -236,6 +240,10 @@ namespace OpenTween.Controls
             if (!this.tabMap.TryGetValue(tabName, out var entry))
                 return;
 
+            // 状態が変化していない場合は Appearance を触らない（タブヘッダーの再描画を避ける）
+            if (this.tabUnreadStates.TryGetValue(tabName, out var currentState) && currentState == hasUnread)
+                return;
+
             try
             {
                 if (hasUnread)
@@ -247,6 +255,8 @@ namespace OpenTween.Controls
                 {
                     entry.Panel.Appearance.Reset();
                 }
+
+                this.tabUnreadStates[tabName] = hasUnread;
             }
             catch (NullReferenceException)
             {
@@ -269,6 +279,12 @@ namespace OpenTween.Controls
 
             this.tabPanelContents.Remove(oldName);
             this.tabPanelContents[newName] = entry.Content;
+
+            if (this.tabUnreadStates.TryGetValue(oldName, out var unreadState))
+            {
+                this.tabUnreadStates.Remove(oldName);
+                this.tabUnreadStates[newName] = unreadState;
+            }
 
             var index = this.tabOrder.IndexOf(oldName);
             if (index >= 0)

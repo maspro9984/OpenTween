@@ -101,6 +101,31 @@ namespace OpenTween
             this.SetStyle(ControlStyles.Selectable, true);
         }
 
+        /// <summary>仮想マシン上で動作しているかを BIOS 情報から判定する</summary>
+        private static bool IsVirtualizedEnvironment()
+        {
+            try
+            {
+                using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"HARDWARE\DESCRIPTION\System\BIOS");
+                if (key == null)
+                    return false;
+
+                var manufacturer = key.GetValue("SystemManufacturer") as string ?? "";
+                var productName = key.GetValue("SystemProductName") as string ?? "";
+                var combined = manufacturer + " " + productName;
+
+                return combined.IndexOf("Parallels", StringComparison.OrdinalIgnoreCase) >= 0
+                    || combined.IndexOf("VMware", StringComparison.OrdinalIgnoreCase) >= 0
+                    || combined.IndexOf("VirtualBox", StringComparison.OrdinalIgnoreCase) >= 0
+                    || combined.IndexOf("QEMU", StringComparison.OrdinalIgnoreCase) >= 0
+                    || combined.IndexOf("Virtual Machine", StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         /// <summary>WebView2 の初期化を開始する（フォーム表示時に呼ばれる）</summary>
         private async Task EnsureWebViewInitializedAsync()
         {
@@ -111,12 +136,13 @@ namespace OpenTween
 
             try
             {
-                var options = new CoreWebView2EnvironmentOptions
-                {
-                    // 仮想化環境（Parallel Desktop 等）で GPU レンダリングが動作しない場合に
-                    // ソフトウェアレンダリングにフォールバックする
-                    AdditionalBrowserArguments = "--disable-gpu --disable-gpu-compositing --disable-gpu-sandbox --use-gl=swiftshader",
-                };
+                var options = new CoreWebView2EnvironmentOptions();
+
+                // 仮想化環境（Parallels Desktop 等）では GPU レンダリングが動作しないため
+                // ソフトウェアレンダリングにフォールバックする。
+                // 実機では GPU レンダリングを使用する（swiftshader は CPU 負荷が高いため）
+                if (IsVirtualizedEnvironment())
+                    options.AdditionalBrowserArguments = "--disable-gpu --disable-gpu-compositing --disable-gpu-sandbox --use-gl=swiftshader";
                 var env = await CoreWebView2Environment.CreateAsync(
                     browserExecutableFolder: null,
                     userDataFolder: System.IO.Path.Combine(
@@ -231,14 +257,6 @@ namespace OpenTween
             this.showedAt = DateTime.UtcNow;
             this.mouseCheckTimer.Start();
             this.Show();
-        }
-
-        /// <summary>非表示のままURLを先行読み込みする</summary>
-        public void Prefetch(string url)
-        {
-            // 仮想化環境では非表示中のナビゲーションで描画が停止するため、
-            // URL を記録するだけにして実際のナビゲーションは ShowPreview 時に行う
-            this.pendingUrl = url;
         }
 
         public void ShowPreview(string url, Point position)
