@@ -988,11 +988,16 @@ namespace OpenTween
             {
                 if (MyCommon.IsNullOrEmpty(browserPath))
                 {
-                    var options = new Windows.System.LauncherOptions
+                    // Launcher.LaunchUriAsync はシェルとのプロセス間通信や関連付けの解決で
+                    // UI スレッドを長時間ブロックすることがあるためワーカースレッド上で呼び出す
+                    await Task.Run(async () =>
                     {
-                        IgnoreAppUriHandlers = true,
-                    };
-                    await Windows.System.Launcher.LaunchUriAsync(uri, options);
+                        var options = new Windows.System.LauncherOptions
+                        {
+                            IgnoreAppUriHandlers = true,
+                        };
+                        await Windows.System.Launcher.LaunchUriAsync(uri, options);
+                    });
                 }
                 else
                 {
