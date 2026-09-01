@@ -1288,6 +1288,10 @@ namespace OpenTween
 
         private async void DateTimeLabel_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
         {
+            // ブラウザで開く操作時はホバーによるポップアップ表示（WebBrowser のレンダリング）を
+            // 走らせない。クリック直後に発火すると UI スレッドを塞いでしまうため
+            this.labelHoverTimer?.Stop();
+
             if (this.CurrentPost?.PostUri is { } postUri)
                 await MyCommon.OpenInBrowserAsync(this, postUri);
         }
