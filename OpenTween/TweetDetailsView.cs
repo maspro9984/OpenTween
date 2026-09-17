@@ -92,11 +92,6 @@ namespace OpenTween
         private ThemeManager? themeManager;
         private DetailsHtmlBuilder? detailsHtmlBuilder;
 
-        private LinkPreviewManager? linkPreviewManager;
-        private System.Windows.Forms.Timer? linkHoverTimer;
-        private System.Windows.Forms.Timer? linkHideDelayTimer;
-        private string? pendingPreviewUrl;
-
         public TweetDetailsView()
         {
             this.InitializeComponent();
@@ -112,13 +107,12 @@ namespace OpenTween
             this.PostBrowser.AllowWebBrowserDrop = false;  // COMException を回避するため、ActiveX の初期化が終わってから設定する
         }
 
-        public void Initialize(TweenMain owner, ImageCache iconCache, ThemeManager themeManager, DetailsHtmlBuilder detailsHtmlBuilder, LinkPreviewManager linkPreviewManager)
+        public void Initialize(TweenMain owner, ImageCache iconCache, ThemeManager themeManager, DetailsHtmlBuilder detailsHtmlBuilder)
         {
             this.owner = owner;
             this.iconCache = iconCache;
             this.themeManager = themeManager;
             this.detailsHtmlBuilder = detailsHtmlBuilder;
-            this.linkPreviewManager = linkPreviewManager;
         }
 
         private Exception NotInitializedException()
@@ -126,6 +120,61 @@ namespace OpenTween
 
         public void ClearPostBrowser()
             => this.PostBrowser.DocumentText = this.HtmlBuilder.Build("");
+
+        /// <summary>
+        /// <see cref="PostBrowser"/> を新しいインスタンスで作り直します
+        /// </summary>
+        /// <remarks>
+        /// ドッキングレイアウトの復元などで親コントロールが付け替えられると、WebBrowser (ActiveX) が
+        /// クリックされて再アクティブ化されるまで DocumentText の変更が表示されない状態になるため、
+        /// 付け替え後に呼び出して作り直す。
+        /// </remarks>
+        public void RecreatePostBrowser()
+        {
+            var oldBrowser = this.PostBrowser;
+            var cellPosition = this.TableLayoutPanel1.GetCellPosition(oldBrowser);
+            var columnSpan = this.TableLayoutPanel1.GetColumnSpan(oldBrowser);
+            var rowSpan = this.TableLayoutPanel1.GetRowSpan(oldBrowser);
+
+            var newBrowser = new WebBrowser
+            {
+                AccessibleName = oldBrowser.AccessibleName,
+                ContextMenuStrip = oldBrowser.ContextMenuStrip,
+                Dock = oldBrowser.Dock,
+                IsWebBrowserContextMenuEnabled = oldBrowser.IsWebBrowserContextMenuEnabled,
+                Margin = oldBrowser.Margin,
+                MinimumSize = oldBrowser.MinimumSize,
+                Name = oldBrowser.Name,
+                TabStop = oldBrowser.TabStop,
+            };
+
+            using (ControlTransaction.Layout(this.TableLayoutPanel1))
+            {
+                oldBrowser.Navigated -= this.PostBrowser_Navigated;
+                oldBrowser.Navigating -= this.PostBrowser_Navigating;
+                oldBrowser.StatusTextChanged -= this.PostBrowser_StatusTextChanged;
+                oldBrowser.PreviewKeyDown -= this.PostBrowser_PreviewKeyDown;
+                oldBrowser.ContextMenuStrip = null;
+                this.TableLayoutPanel1.Controls.Remove(oldBrowser);
+                oldBrowser.Dispose();
+
+                this.TableLayoutPanel1.Controls.Add(newBrowser, cellPosition.Column, cellPosition.Row);
+                this.TableLayoutPanel1.SetColumnSpan(newBrowser, columnSpan);
+                this.TableLayoutPanel1.SetRowSpan(newBrowser, rowSpan);
+            }
+
+            this.PostBrowser = newBrowser;
+
+            newBrowser.Navigated += this.PostBrowser_Navigated;
+            newBrowser.Navigating += this.PostBrowser_Navigating;
+            newBrowser.StatusTextChanged += this.PostBrowser_StatusTextChanged;
+            newBrowser.PreviewKeyDown += this.PostBrowser_PreviewKeyDown;
+
+            new InternetSecurityManager(newBrowser);
+            newBrowser.AllowWebBrowserDrop = false;  // COMException を回避するため、ActiveX の初期化が終わってから設定する
+
+            this.ClearPostBrowser();
+        }
 
         public async Task ShowPostDetails(PostClass post)
         {
@@ -224,15 +273,15 @@ namespace OpenTween
                 return;
             }
 
+            // 引用ツイート・リプライ元は API から先読みせず、読み込み済みのものだけを埋め込んで一度で描画する
+            var body = post.IsDeleted ? "(DELETED)" : post.Text + this.CreateQuoteTweetsHtml(post);
+
             using (ControlTransaction.Update(this.PostBrowser))
             {
-                this.PostBrowser.DocumentText =
-                    this.HtmlBuilder.Build(post.IsDeleted ? "(DELETED)" : post.Text);
+                this.PostBrowser.DocumentText = this.HtmlBuilder.Build(body);
 
-                this.PostBrowser.Document.Window.ScrollTo(0, 0);
+                this.PostBrowser.Document?.Window?.ScrollTo(0, 0);
             }
-
-            loadTasks.Add(() => this.AppendQuoteTweetAsync(post));
 
             await loadTasks.RunAll();
         }
@@ -330,67 +379,28 @@ namespace OpenTween
         /// <summary>
         /// 発言詳細欄のツイートURLを展開する
         /// </summary>
-        private async Task AppendQuoteTweetAsync(PostClass post)
+        /// <summary>
+        /// 引用ツイート・リプライ元の HTML を生成します
+        /// </summary>
+        /// <remarks>
+        /// 選択のたびに API から取得すると UI の応答性が悪化するため、読み込み済みの投稿のみ本文を表示する。
+        /// 未取得の投稿はリンクのみを表示し、クリック時に取得する。
+        /// </remarks>
+        private string CreateQuoteTweetsHtml(PostClass post)
         {
-            var quoteStatusIds = post.QuoteStatusIds;
-            if (quoteStatusIds.Length == 0 && post.InReplyToStatusId == null)
-                return;
-
-            // 「読み込み中」テキストを表示
-            var loadingQuoteHtml = quoteStatusIds.Select(x => FormatQuoteTweetHtml(x, Properties.Resources.LoadingText, isReply: false));
-
-            var loadingReplyHtml = string.Empty;
-            if (post.InReplyToStatusId != null)
-                loadingReplyHtml = FormatQuoteTweetHtml(post.InReplyToStatusId, Properties.Resources.LoadingText, isReply: true);
-
-            var body = post.Text + string.Concat(loadingQuoteHtml) + loadingReplyHtml;
-
-            using (ControlTransaction.Update(this.PostBrowser))
-                this.PostBrowser.DocumentText = this.HtmlBuilder.Build(body);
-
-            // 引用ツイートを読み込み
-            var loadTweetTasks = quoteStatusIds.Select(x => this.CreateQuoteTweetHtml(x, isReply: false)).ToList();
+            var htmls = post.QuoteStatusIds.Select(x => this.CreateQuoteTweetHtml(x, isReply: false)).ToList();
 
             if (post.InReplyToStatusId != null)
-                loadTweetTasks.Add(this.CreateQuoteTweetHtml(post.InReplyToStatusId, isReply: true));
+                htmls.Add(this.CreateQuoteTweetHtml(post.InReplyToStatusId, isReply: true));
 
-            var quoteHtmls = await Task.WhenAll(loadTweetTasks);
-
-            // 非同期処理中に表示中のツイートが変わっていたらキャンセルされたものと扱う
-            if (this.CurrentPost != post || this.CurrentPost.IsDeleted)
-                return;
-
-            body = post.Text + string.Concat(quoteHtmls);
-
-            using (ControlTransaction.Update(this.PostBrowser))
-                this.PostBrowser.DocumentText = this.HtmlBuilder.Build(body);
+            return string.Concat(htmls);
         }
 
-        private async Task<string> CreateQuoteTweetHtml(PostId statusId, bool isReply)
+        private string CreateQuoteTweetHtml(PostId statusId, bool isReply)
         {
             var post = TabInformations.GetInstance()[statusId];
             if (post == null)
-            {
-                var account = this.Owner.GetAccountForPostId(statusId);
-                if (account == null)
-                    return FormatQuoteTweetHtml(statusId, "This post is unavailable.", isReply);
-
-                try
-                {
-                    post = await account.Client.GetPostById(statusId, firstLoad: false)
-                        .ConfigureAwait(false);
-                }
-                catch (WebApiException ex)
-                {
-                    return FormatQuoteTweetHtml(statusId, WebUtility.HtmlEncode($"Err:{ex.Message}(GetStatus)"), isReply);
-                }
-
-                if (account.AccountState.BlockedUserIds.Contains(post.UserId))
-                    return FormatQuoteTweetHtml(statusId, "This Tweet is unavailable.", isReply);
-
-                if (!TabInformations.GetInstance().AddQuoteTweet(post))
-                    return FormatQuoteTweetHtml(statusId, "This Tweet is unavailable.", isReply);
-            }
+                return FormatQuoteTweetHtml(statusId, "(クリックして表示)", isReply);
 
             return FormatQuoteTweetHtml(post, isReply);
         }
@@ -567,189 +577,15 @@ namespace OpenTween
                     || this.PostBrowser.StatusText.StartsWith("data", StringComparison.Ordinal))
                 {
                     this.RaiseStatusChanged(this.PostBrowser.StatusText.Replace("&", "&&"));
-
-                    // リンクホバープレビュー開始（サムネイル対応URLを除く）
-                    if (this.PostBrowser.StatusText.StartsWith("http", StringComparison.Ordinal)
-                        && !this.IsThumbnailUrl(this.PostBrowser.StatusText))
-                        this.StartLinkHoverTimer(this.PostBrowser.StatusText);
                 }
                 if (MyCommon.IsNullOrEmpty(this.PostBrowser.StatusText))
                 {
                     this.RaiseStatusChanged(statusText: "");
-
-                    // リンクホバープレビュー終了
-                    this.StartLinkHideDelayTimer();
                 }
             }
             catch (Exception)
             {
             }
-        }
-
-        private void StartLinkHoverTimer(string url)
-        {
-            // 非表示遅延タイマーをキャンセル（リンク間を移動した場合）
-            this.linkHideDelayTimer?.Stop();
-
-            this.pendingPreviewUrl = url;
-
-            this.linkHoverTimer?.Stop();
-            this.linkHoverTimer?.Dispose();
-            this.linkHoverTimer = new System.Windows.Forms.Timer { Interval = 500 };
-            this.linkHoverTimer.Tick += this.LinkHoverTimer_Tick;
-            this.linkHoverTimer.Start();
-        }
-
-        private void StartLinkHideDelayTimer()
-        {
-            this.linkHoverTimer?.Stop();
-
-            this.linkHideDelayTimer?.Stop();
-            this.linkHideDelayTimer?.Dispose();
-            this.linkHideDelayTimer = new System.Windows.Forms.Timer { Interval = 200 };
-            this.linkHideDelayTimer.Tick += this.LinkHideDelayTimer_Tick;
-            this.linkHideDelayTimer.Start();
-        }
-
-        private void LinkHoverTimer_Tick(object? sender, EventArgs e)
-        {
-            this.linkHoverTimer?.Stop();
-
-            if (this.pendingPreviewUrl == null)
-                return;
-
-            // タイマー発火時にまだ同じリンク上にマウスがあるか確認（かすっただけの場合を除外）
-            if (this.PostBrowser.StatusText != this.pendingPreviewUrl)
-                return;
-
-            // StatusText はマウスがコントロール外へ出ても空に戻らないことがあるため、
-            // カーソルが実際に PostBrowser 内のリンク上にあることも確認する
-            if (!this.IsCursorOnLink())
-                return;
-
-            // PostBrowser の StatusText は t.co 短縮URLなので展開済みURLに変換してからキャッシュを検索する
-            var url = this.CurrentPost?.GetExpandedUrl(this.pendingPreviewUrl) ?? this.pendingPreviewUrl;
-            this.linkPreviewManager?.ShowPreview(url, Cursor.Position);
-        }
-
-        private void LinkHideDelayTimer_Tick(object? sender, EventArgs e)
-        {
-            this.linkHideDelayTimer?.Stop();
-
-            // マウスがプレビューフォーム上にある場合は閉じない
-            if (this.linkPreviewManager != null && this.linkPreviewManager.IsAnyFormMouseOver)
-                return;
-
-            this.linkPreviewManager?.HideAll();
-        }
-
-        /// <summary>マウスカーソルが PostBrowser 内のリンク (a 要素) 上にあるかを判定する</summary>
-        private bool IsCursorOnLink()
-        {
-            var clientPos = this.PostBrowser.PointToClient(Cursor.Position);
-            if (!this.PostBrowser.ClientRectangle.Contains(clientPos))
-                return false;
-
-            try
-            {
-                var element = this.PostBrowser.Document?.GetElementFromPoint(clientPos);
-                while (element != null)
-                {
-                    if (string.Equals(element.TagName, "A", StringComparison.OrdinalIgnoreCase))
-                        return true;
-
-                    element = element.Parent;
-                }
-            }
-            catch (Exception)
-            {
-                // Document へのアクセスに失敗した場合は判定不能のため表示しない
-            }
-
-            return false;
-        }
-
-        private bool IsThumbnailUrl(string url)
-        {
-            var post = this.CurrentPost;
-            if (post == null)
-                return false;
-
-            // 展開済みURLを取得
-            // 1. PostClass.ExpandedUrls から取得（通常のURL エンティティ）
-            var expandedUrl = post.GetExpandedUrl(url);
-
-            // 2. ExpandedUrls で展開できない場合、DOM の title 属性から取得（メディアエンティティ等）
-            if (expandedUrl == url)
-            {
-                try
-                {
-                    foreach (var link in this.PostBrowser.Document.Links.Cast<HtmlElement>())
-                    {
-                        if (link.GetAttribute("href") == url)
-                        {
-                            var title = link.GetAttribute("title");
-                            if (!MyCommon.IsNullOrEmpty(title))
-                                expandedUrl = title;
-                            break;
-                        }
-                    }
-                }
-                catch (Exception)
-                {
-                }
-            }
-
-            return IsThumbnailExpandedUrl(expandedUrl);
-        }
-
-        internal static bool IsThumbnailExpandedUrl(string expandedUrl)
-        {
-            // 画像直リンク
-            if (Regex.IsMatch(expandedUrl, @"\.(jpg|jpeg|gif|png|bmp|webp)(\?.*)?$", RegexOptions.IgnoreCase))
-                return true;
-
-            // pic.twitter.com / pbs.twimg.com / pic.x.com
-            if (expandedUrl.Contains("pbs.twimg.com") || expandedUrl.Contains("pic.twitter.com") || expandedUrl.Contains("pic.x.com"))
-                return true;
-
-            // twitter.com/x.com の画像・動画ページ (/photo/, /video/)
-            if (Regex.IsMatch(expandedUrl, @"^https?://(twitter|x)\.com/.+/(photo|video)/", RegexOptions.IgnoreCase))
-                return true;
-
-            // YouTube
-            if (expandedUrl.Contains("youtube.com/watch") || expandedUrl.Contains("youtu.be/"))
-                return true;
-
-            // ニコニコ動画
-            if (expandedUrl.Contains("nicovideo.jp/watch") || expandedUrl.Contains("nico.ms/"))
-                return true;
-
-            // Instagram
-            if (expandedUrl.Contains("instagram.com/") || expandedUrl.Contains("instagr.am/"))
-                return true;
-
-            // Imgur
-            if (Regex.IsMatch(expandedUrl, @"^https?://(?:i\.)?imgur\.com/\w+", RegexOptions.IgnoreCase))
-                return true;
-
-            // pixiv
-            if (expandedUrl.Contains("pixiv.net/"))
-                return true;
-
-            // Gyazo
-            if (expandedUrl.Contains("gyazo.com/"))
-                return true;
-
-            // Vimeo
-            if (expandedUrl.Contains("vimeo.com/"))
-                return true;
-
-            return false;
-        }
-
-        private void LinkPreviewForm_PreviewHidden(object? sender, EventArgs e)
-        {
         }
 
         private async void SourceLinkLabel_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
