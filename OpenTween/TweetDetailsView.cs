@@ -273,7 +273,7 @@ namespace OpenTween
                 return;
             }
 
-            // 引用ツイート・リプライ元は API から先読みせず、読み込み済みのものだけを埋め込んで一度で描画する
+            // 引用ツイートは API から先読みせず読み込み済みのものだけを埋め込む。リプライ元は未取得なら先読みする
             var body = post.IsDeleted ? "(DELETED)" : post.Text + this.CreateQuoteTweetsHtml(post);
 
             using (ControlTransaction.Update(this.PostBrowser))
@@ -282,6 +282,9 @@ namespace OpenTween
 
                 this.PostBrowser.Document?.Window?.ScrollTo(0, 0);
             }
+
+            if (!post.IsDeleted && post.InReplyToStatusId != null && TabInformations.GetInstance()[post.InReplyToStatusId] == null)
+                loadTasks.Add(() => this.AppendInReplyToTweetAsync(post));
 
             await loadTasks.RunAll();
         }
@@ -377,21 +380,19 @@ namespace OpenTween
         }
 
         /// <summary>
-        /// 発言詳細欄のツイートURLを展開する
-        /// </summary>
-        /// <summary>
         /// 引用ツイート・リプライ元の HTML を生成します
         /// </summary>
         /// <remarks>
-        /// 選択のたびに API から取得すると UI の応答性が悪化するため、読み込み済みの投稿のみ本文を表示する。
-        /// 未取得の投稿はリンクのみを表示し、クリック時に取得する。
+        /// 選択のたびに引用ツイートを API から取得すると UI の応答性が悪化するため、読み込み済みの投稿のみ本文を表示する。
+        /// 未取得の引用ツイートはリンクのみを表示し、クリック時に取得する。
+        /// 未取得のリプライ元は「読み込み中」を表示し、<see cref="AppendInReplyToTweetAsync"/> で取得する。
         /// </remarks>
-        private string CreateQuoteTweetsHtml(PostClass post)
+        private string CreateQuoteTweetsHtml(PostClass post, string? inReplyToHtml = null)
         {
             var htmls = post.QuoteStatusIds.Select(x => this.CreateQuoteTweetHtml(x, isReply: false)).ToList();
 
             if (post.InReplyToStatusId != null)
-                htmls.Add(this.CreateQuoteTweetHtml(post.InReplyToStatusId, isReply: true));
+                htmls.Add(inReplyToHtml ?? this.CreateQuoteTweetHtml(post.InReplyToStatusId, isReply: true));
 
             return string.Concat(htmls);
         }
@@ -400,9 +401,57 @@ namespace OpenTween
         {
             var post = TabInformations.GetInstance()[statusId];
             if (post == null)
-                return FormatQuoteTweetHtml(statusId, "(クリックして表示)", isReply);
+                return FormatQuoteTweetHtml(statusId, isReply ? Properties.Resources.LoadingText : "(クリックして表示)", isReply);
 
             return FormatQuoteTweetHtml(post, isReply);
+        }
+
+        /// <summary>
+        /// 未取得のリプライ元を API から取得して発言詳細欄に表示する
+        /// </summary>
+        private async Task AppendInReplyToTweetAsync(PostClass post)
+        {
+            if (post.InReplyToStatusId == null)
+                return;
+
+            var inReplyToHtml = await this.FetchInReplyToTweetHtml(post.InReplyToStatusId);
+
+            // 非同期処理中に表示中のツイートが変わっていたらキャンセルされたものと扱う
+            if (this.CurrentPost != post || this.CurrentPost.IsDeleted)
+                return;
+
+            var body = post.Text + this.CreateQuoteTweetsHtml(post, inReplyToHtml);
+
+            using (ControlTransaction.Update(this.PostBrowser))
+                this.PostBrowser.DocumentText = this.HtmlBuilder.Build(body);
+        }
+
+        private async Task<string> FetchInReplyToTweetHtml(PostId statusId)
+        {
+            var post = TabInformations.GetInstance()[statusId];
+            if (post == null)
+            {
+                var account = this.Owner.GetAccountForPostId(statusId);
+                if (account == null)
+                    return FormatQuoteTweetHtml(statusId, "This post is unavailable.", isReply: true);
+
+                try
+                {
+                    post = await account.Client.GetPostById(statusId, firstLoad: false);
+                }
+                catch (WebApiException ex)
+                {
+                    return FormatQuoteTweetHtml(statusId, WebUtility.HtmlEncode($"Err:{ex.Message}(GetStatus)"), isReply: true);
+                }
+
+                if (account.AccountState.BlockedUserIds.Contains(post.UserId))
+                    return FormatQuoteTweetHtml(statusId, "This Tweet is unavailable.", isReply: true);
+
+                if (!TabInformations.GetInstance().AddQuoteTweet(post))
+                    return FormatQuoteTweetHtml(statusId, "This Tweet is unavailable.", isReply: true);
+            }
+
+            return FormatQuoteTweetHtml(post, isReply: true);
         }
 
         internal static string FormatQuoteTweetHtml(PostClass post, bool isReply)
