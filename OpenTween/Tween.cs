@@ -137,7 +137,6 @@ namespace OpenTween
 
         private readonly ThumbnailGenerator thumbGenerator;
 
-        private readonly LinkPreviewManager linkPreviewManager = new();
         private readonly ThumbnailImageCache thumbnailImageCache = new();
 
         /// <summary>発言履歴</summary>
@@ -330,8 +329,7 @@ namespace OpenTween
 
             // フォント＆文字色＆背景色保持
             this.themeManager = new(this.settings.Local);
-            this.tweetDetailsView.Initialize(this, this.iconCache, this.themeManager, this.detailsHtmlBuilder, this.linkPreviewManager);
-            this.linkPreviewManager.MouseLeaveDelayMs = this.settings.Common.LinkPreviewMouseLeaveDelayMs;
+            this.tweetDetailsView.Initialize(this, this.iconCache, this.themeManager, this.detailsHtmlBuilder);
 
             // sfTab は DocumentManagerTabContainer に移行済み
 
@@ -559,7 +557,6 @@ namespace OpenTween
                     drawer.Dispose();
                 this.listDrawers.Clear();
 
-                this.linkPreviewManager.Dispose();
                 this.thumbnailImageCache.Dispose();
             }
 
@@ -7408,7 +7405,14 @@ namespace OpenTween
         {
             // パネルレイアウトを復元
             var layoutPath = Path.Combine(this.settings.SettingsPath, "DockLayout.xml");
-            this.ListTab.RestoreLayout(layoutPath);
+            if (File.Exists(layoutPath))
+            {
+                this.ListTab.RestoreLayout(layoutPath);
+
+                // レイアウト復元で親パネルが付け替えられた PostBrowser はクリックするまで表示が更新されないため作り直す
+                this.tweetDetailsView.RecreatePostBrowser();
+                this.DispSelectedPost(forceupdate: true);
+            }
 
             this.NotifyIcon1.Visible = true;
             this.StartTimers();
