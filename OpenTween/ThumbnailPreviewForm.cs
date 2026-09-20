@@ -70,71 +70,161 @@ namespace OpenTween
             }
         }
 
-        public async Task ShowPreview(ThumbnailInfo thumbnail, Point position)
+        /// <summary>サムネイルの拡大プレビューを表示する</summary>
+        /// <param name="thumbnail">表示対象のサムネイル</param>
+        /// <param name="position">表示位置の基準となるカーソル位置</param>
+        /// <param name="thumbnailImageTask">
+        /// 読み込み済み（または読み込み中）のサムネイル画像。
+        /// フルサイズ画像の取得を待つ間、または取得に失敗した場合の表示に使用する
+        /// </param>
+        public async Task ShowPreview(ThumbnailInfo thumbnail, Point position, Task<MemoryImage>? thumbnailImageTask = null)
         {
             var imageUrl = thumbnail.FullSizeImageUrl ?? thumbnail.ThumbnailImageUrl;
-            if (imageUrl == null)
+            if (imageUrl == null && thumbnailImageTask == null)
                 return;
+
+            var previewKey = imageUrl ?? thumbnail.MediaPageUrl;
 
             // 同じ画像なら再読み込みしない
-            if (imageUrl == this.lastLoadedUrl && this.Visible)
+            if (previewKey == this.lastLoadedUrl && this.Visible)
                 return;
 
+            this.loadCts?.Cancel();
+            var cts = new CancellationTokenSource();
+            this.loadCts = cts;
+            var token = cts.Token;
+
             // キャッシュチェック（ヒットした場合は即座に表示）
-            if (this.ImageCache?.TryGet(imageUrl) is { } cachedImage)
+            if (imageUrl != null && this.ImageCache?.TryGet(imageUrl) is { } cachedImage)
             {
-                this.loadCts?.Cancel();
-                var cloned = cachedImage.Clone();
-                this.pictureBox.Image = cloned;
-                this.lastLoadedUrl = imageUrl;
-                this.originalImageSize = cloned.Image.Size;
-                this.zoomScale = 1.0;
-                this.AdjustSizeAndPosition(cloned.Image.Size, position);
-                this.Show();
+                this.SetPreviewImage(cachedImage.Clone(), position);
+                this.lastLoadedUrl = previewKey;
                 return;
             }
 
-            this.loadCts?.Cancel();
-            this.loadCts = new CancellationTokenSource();
-            var token = this.loadCts.Token;
+            // サムネイル画像と同じ URL であれば改めてダウンロードする必要はない
+            var needsFullSizeLoad = imageUrl != null &&
+                (thumbnailImageTask == null || thumbnail.Loader != null || imageUrl != thumbnail.ThumbnailImageUrl);
+
+            var fullSizeTask = needsFullSizeLoad
+                ? Task.Run(() => this.LoadImageAsync(imageUrl!, token), token)
+                : null;
+
+            // フルサイズ画像の取得には時間が掛かる（または失敗する）場合があるため、
+            // 先に読み込み済みのサムネイル画像を拡大表示しておく
+            var placeholderShown = false;
+            if (thumbnailImageTask != null)
+            {
+                try
+                {
+                    var thumbnailImage = await thumbnailImageTask;
+
+                    if (token.IsCancellationRequested)
+                    {
+                        DisposeWhenCompleted(fullSizeTask);
+                        return;
+                    }
+
+                    // フルサイズ画像が先に取得できている場合はそちらを優先する
+                    if (fullSizeTask == null || fullSizeTask.Status != TaskStatus.RanToCompletion)
+                    {
+                        this.SetPreviewImage(thumbnailImage.Clone(), position);
+                        this.lastLoadedUrl = previewKey;
+                        placeholderShown = true;
+                    }
+                }
+                catch (Exception)
+                {
+                    // サムネイル画像が使えない場合はフルサイズ画像の取得結果のみで表示する
+                }
+            }
+
+            if (fullSizeTask == null)
+                return;
 
             try
             {
-                var image = await Task.Run(
-                    () => this.LoadImageAsync(imageUrl, token),
-                    token
-                );
+                var image = await fullSizeTask;
 
                 if (token.IsCancellationRequested)
+                {
+                    image.Dispose();
                     return;
+                }
 
                 // キャッシュに保存して、表示用にクローンを使用
                 MemoryImage displayImage;
                 if (this.ImageCache != null)
                 {
-                    this.ImageCache.Store(imageUrl, image);
                     displayImage = image.Clone();
+                    this.ImageCache.Store(imageUrl!, image);
                 }
                 else
                 {
                     displayImage = image;
                 }
 
-                this.pictureBox.Image = displayImage;
-                this.lastLoadedUrl = imageUrl;
-                this.originalImageSize = displayImage.Image.Size;
-                this.zoomScale = 1.0;
+                if (placeholderShown)
+                    this.ReplacePreviewImage(displayImage);
+                else
+                    this.SetPreviewImage(displayImage, position);
 
-                this.AdjustSizeAndPosition(displayImage.Image.Size, position);
-                this.Show();
+                this.lastLoadedUrl = previewKey;
             }
             catch (OperationCanceledException)
             {
             }
             catch (Exception)
             {
-                // 読み込み失敗時は表示しない
+                // 読み込み失敗時はサムネイル画像の拡大表示のままとする
             }
+        }
+
+        private static void DisposeWhenCompleted(Task<MemoryImage>? task)
+        {
+            if (task == null)
+                return;
+
+            _ = AsyncExceptionBoundary.IgnoreExceptionAndDispose(task);
+        }
+
+        /// <summary>プレビュー画像を設定し、画像サイズに合わせてフォームを配置して表示する</summary>
+        private void SetPreviewImage(MemoryImage image, Point position)
+        {
+            var oldImage = this.pictureBox.Image;
+            this.pictureBox.Image = image;
+            oldImage?.Dispose();
+
+            this.originalImageSize = image.Image.Size;
+            this.AdjustSizeAndPosition(image.Image.Size, position);
+            this.UpdateZoomScaleFromCurrentSize();
+
+            if (!this.Visible)
+                this.Show();
+        }
+
+        /// <summary>表示中のフォームの位置・サイズを維持したまま、より高解像度な画像に差し替える</summary>
+        private void ReplacePreviewImage(MemoryImage image)
+        {
+            var oldImage = this.pictureBox.Image;
+            this.pictureBox.Image = image;
+            oldImage?.Dispose();
+
+            this.originalImageSize = image.Image.Size;
+            this.UpdateZoomScaleFromCurrentSize();
+        }
+
+        /// <summary>現在の表示サイズを基準にズーム倍率を設定する（ホイール操作時に表示サイズが飛ばないようにする）</summary>
+        private void UpdateZoomScaleFromCurrentSize()
+        {
+            if (this.originalImageSize.Width <= 0)
+            {
+                this.zoomScale = 1.0;
+                return;
+            }
+
+            var displayWidth = this.Width - this.Padding.Horizontal;
+            this.zoomScale = Math.Max(0.1, Math.Min((double)displayWidth / this.originalImageSize.Width, 5.0));
         }
 
         private async Task<MemoryImage> LoadImageAsync(string imageUrl, CancellationToken token)

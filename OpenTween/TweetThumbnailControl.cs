@@ -118,6 +118,10 @@ namespace OpenTween
             }
             else
             {
+                // 発言が切り替わったら前の発言の拡大プレビューは閉じる
+                this.hoverTimer?.Stop();
+                this.previewForm?.HidePreview();
+
                 this.pictureBox.Image = null;
                 this.pictureBox.AccessibleDescription = "";
                 this.toolTip.SetToolTip(this.pictureBox, "");
@@ -144,15 +148,40 @@ namespace OpenTween
 
         private async void UpdatePreviewIfVisible()
         {
-            if (this.previewForm == null || !this.previewForm.Visible)
-                return;
-
             if (!this.Model.ThumbnailAvailable)
                 return;
 
+            if (this.previewForm == null || !this.previewForm.Visible)
+            {
+                // サムネイルの準備が終わる前からマウスが乗っていた場合は MouseEnter が再度発生しないため、
+                // ここでホバー判定をやり直す
+                if (this.IsMouseOverPictureBox())
+                    this.StartHoverTimer();
+
+                return;
+            }
+
             var thumbnail = this.Model.CurrentThumbnail;
             this.previewForm.InvalidateCache();
-            await this.previewForm.ShowPreview(thumbnail, this.previewForm.Location);
+            await this.previewForm.ShowPreview(thumbnail, this.previewForm.Location, this.Model.LoadSelectedThumbnail());
+        }
+
+        private bool IsMouseOverPictureBox()
+        {
+            if (!this.pictureBox.IsHandleCreated || !this.pictureBox.Visible)
+                return false;
+
+            return this.pictureBox.ClientRectangle.Contains(this.pictureBox.PointToClient(Cursor.Position));
+        }
+
+        private void StartHoverTimer()
+        {
+            // 既存タイマーを停止してから新しいタイマーを開始
+            this.hoverTimer?.Stop();
+            this.hoverTimer?.Dispose();
+            this.hoverTimer = new Timer { Interval = 300 };
+            this.hoverTimer.Tick += this.HoverTimer_Tick;
+            this.hoverTimer.Start();
         }
 
         public async Task OpenImageInBrowser()
@@ -234,12 +263,7 @@ namespace OpenTween
             // 非表示遅延タイマーをキャンセル（プレビューから戻ってきた場合）
             this.hideDelayTimer?.Stop();
 
-            // 既存タイマーを停止してから新しいタイマーを開始
-            this.hoverTimer?.Stop();
-            this.hoverTimer?.Dispose();
-            this.hoverTimer = new Timer { Interval = 300 };
-            this.hoverTimer.Tick += this.HoverTimer_Tick;
-            this.hoverTimer.Start();
+            this.StartHoverTimer();
         }
 
         private void PictureBox_MouseLeave(object? sender, EventArgs e)
@@ -263,7 +287,7 @@ namespace OpenTween
                 return;
 
             // マウスがサムネイル pictureBox 上にある場合も閉じない
-            if (this.pictureBox.ClientRectangle.Contains(this.pictureBox.PointToClient(Cursor.Position)))
+            if (this.IsMouseOverPictureBox())
                 return;
 
             this.previewForm?.HidePreview();
@@ -282,6 +306,10 @@ namespace OpenTween
             if (!this.Model.ThumbnailAvailable)
                 return;
 
+            // タイマー待機中にマウスが離れていた場合は表示しない
+            if (!this.IsMouseOverPictureBox())
+                return;
+
             if (this.previewForm == null || this.previewForm.IsDisposed)
             {
                 this.previewForm = new ThumbnailPreviewForm();
@@ -292,7 +320,7 @@ namespace OpenTween
             var thumbnail = this.Model.CurrentThumbnail;
             var cursorPos = Cursor.Position;
 
-            await this.previewForm.ShowPreview(thumbnail, cursorPos);
+            await this.previewForm.ShowPreview(thumbnail, cursorPos, this.Model.LoadSelectedThumbnail());
         }
     }
 }
