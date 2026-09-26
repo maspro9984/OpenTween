@@ -104,7 +104,7 @@ namespace OpenTween.Thumbnail.Services
             var thumb = await service.GetThumbnailInfoAsync(mediaUrl, new PostClass(), CancellationToken.None);
 
             Assert.NotNull(thumb);
-            Assert.Equal("https://pbs.twimg.com/media/DYlFv51VwAUdqWr?format=jpg&name=large", thumb!.ThumbnailImageUrl);
+            Assert.Equal("https://pbs.twimg.com/media/DYlFv51VwAUdqWr?format=jpg&name=medium", thumb!.ThumbnailImageUrl);
             Assert.Equal("https://pbs.twimg.com/media/DYlFv51VwAUdqWr?format=jpg&name=orig", thumb!.FullSizeImageUrl);
         }
 
@@ -117,7 +117,7 @@ namespace OpenTween.Thumbnail.Services
             var thumb = await service.GetThumbnailInfoAsync(mediaUrl, new PostClass(), CancellationToken.None);
 
             Assert.NotNull(thumb);
-            Assert.Equal("https://pbs.twimg.com/media/DYlFv51VwAUdqWr?format=jpg&name=large", thumb!.ThumbnailImageUrl);
+            Assert.Equal("https://pbs.twimg.com/media/DYlFv51VwAUdqWr?format=jpg&name=medium", thumb!.ThumbnailImageUrl);
             Assert.Equal("https://pbs.twimg.com/media/DYlFv51VwAUdqWr?format=jpg&name=orig", thumb!.FullSizeImageUrl);
         }
     }

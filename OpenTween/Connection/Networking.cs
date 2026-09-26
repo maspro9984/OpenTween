@@ -99,6 +99,10 @@ namespace OpenTween.Connection
 
             ServicePointManager.Expect100Continue = false;
             ServicePointManager.CheckCertificateRevocationList = true;
+
+            // .NET Framework の既定値ではホスト毎の同時接続数が 2 に制限されており、
+            // pbs.twimg.com からのアイコン・サムネイル・原寸画像の取得が詰まって表示が遅くなるため引き上げる
+            ServicePointManager.DefaultConnectionLimit = Math.Max(ServicePointManager.DefaultConnectionLimit, 16);
         }
 
         public static void SetWebProxy(

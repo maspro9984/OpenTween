@@ -37,8 +37,10 @@ namespace OpenTween
         private ThumbnailGenerator? thumbGenerator;
         private bool thumbnailAvailable;
         private PostId? currentPostId;
+        private PostId? loadedPostId;
         private ThumbnailInfo[] thumbnails = Array.Empty<ThumbnailInfo>();
         private Task<MemoryImage>?[] loadImageTasks = Array.Empty<Task<MemoryImage>?>();
+        private CancellationTokenSource loadImageCts = new();
         private int selectedIndex = 0;
 
         public bool ThumbnailAvailable
@@ -80,11 +82,20 @@ namespace OpenTween
 
         public async Task PrepareThumbnails(PostClass post, CancellationToken token)
         {
-            if (this.currentPostId == post.StatusId)
+            // 準備が完了している場合のみスキップする。
+            // 準備中にキャンセル・失敗した場合に同じ発言を再選択しても読み込まれなくなるのを防ぐため、
+            // 準備中の発言 (currentPostId) では判定しない
+            if (this.loadedPostId == post.StatusId)
                 return;
 
             this.currentPostId = post.StatusId;
+            this.loadedPostId = null;
             this.ThumbnailAvailable = false;
+
+            // 前の発言のサムネイル画像のダウンロードは不要になるため中断する
+            this.DisposeImages();
+            this.thumbnails = Array.Empty<ThumbnailInfo>();
+            this.loadImageTasks = Array.Empty<Task<MemoryImage>?>();
 
             var thumbnails = (await this.GetThumbailInfoAsync(post, token)).ToArray();
 
@@ -95,6 +106,7 @@ namespace OpenTween
             this.SelectedIndex = 0;
             this.thumbnails = thumbnails;
             this.loadImageTasks = new Task<MemoryImage>?[thumbnails.Length];
+            this.loadedPostId = post.StatusId;
 
             if (thumbnails.Length > 0)
                 this.ThumbnailAvailable = true;
@@ -103,10 +115,14 @@ namespace OpenTween
         public Task<MemoryImage> LoadSelectedThumbnail()
         {
             var runningTask = this.loadImageTasks[this.selectedIndex];
-            if (runningTask != null)
+
+            // 読み込みに失敗・キャンセルされた場合は再度読み込みを行う
+            if (runningTask != null && !runningTask.IsFaulted && !runningTask.IsCanceled)
                 return runningTask;
 
-            var newTask = Task.Run(() => this.thumbnails[this.selectedIndex].LoadThumbnailImageAsync());
+            var thumbnail = this.thumbnails[this.selectedIndex];
+            var token = this.loadImageCts.Token;
+            var newTask = Task.Run(() => thumbnail.LoadThumbnailImageAsync(token), token);
             this.loadImageTasks[this.selectedIndex] = newTask;
 
             return newTask;
@@ -155,6 +171,11 @@ namespace OpenTween
 
         private void DisposeImages()
         {
+            var oldCts = this.loadImageCts;
+            this.loadImageCts = new();
+            oldCts.Cancel();
+            oldCts.Dispose();
+
             var oldImageTasks = this.loadImageTasks.OfType<Task<MemoryImage>>().ToArray();
             _ = AsyncExceptionBoundary.IgnoreExceptionAndDispose(oldImageTasks);
         }

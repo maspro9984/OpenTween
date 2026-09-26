@@ -147,6 +147,49 @@ namespace OpenTween
         }
 
         [Fact]
+        public async Task PrepareThumbnails_RetryAfterCancelTest()
+        {
+            var thumbnailServiceMock = new Mock<IThumbnailService>();
+            thumbnailServiceMock
+                .Setup(
+                    x => x.GetThumbnailInfoAsync("http://slow.example.com/abcd", It.IsAny<PostClass>(), It.IsAny<CancellationToken>())
+                )
+                .Returns(async () =>
+                {
+                    await Task.Delay(200);
+                    return new ThumbnailInfo("http://slow.example.com/abcd", "http://slow.example.com/abcd")
+                    {
+                        Loader = new FakeThumbnailLoader(),
+                    };
+                });
+
+            var thumbnailGenerator = this.CreateThumbnailGenerator();
+            thumbnailGenerator.Services.Add(thumbnailServiceMock.Object);
+
+            var tweetThumbnail = new TweetThumbnail();
+            tweetThumbnail.Initialize(thumbnailGenerator);
+
+            var post = new PostClass
+            {
+                StatusId = new TwitterStatusId("100"),
+                Media = new() { new("http://slow.example.com/abcd") },
+            };
+
+            using (var tokenSource = new CancellationTokenSource())
+            {
+                var task = tweetThumbnail.PrepareThumbnails(post, tokenSource.Token);
+                tokenSource.Cancel();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await task);
+            }
+
+            // キャンセルされた後に同じ発言を再度準備した場合も読み込まれること
+            await tweetThumbnail.PrepareThumbnails(post, CancellationToken.None);
+
+            Assert.True(tweetThumbnail.ThumbnailAvailable);
+            Assert.Single(tweetThumbnail.Thumbnails);
+        }
+
+        [Fact]
         public async Task LoadSelectedThumbnail_Test()
         {
             using var image = TestUtils.CreateDummyImage();

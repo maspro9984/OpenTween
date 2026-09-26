@@ -66,12 +66,15 @@ namespace OpenTween.Thumbnail.Services
             }
 
             var mediaOrig = $"{baseUrl}?format={format}&name=orig";
-            var mediaLarge = $"{baseUrl}?format={format}&name=large";
+
+            // サムネイル欄の表示には large (最大 2048px) は過剰で読み込みが重くなるため medium (最大 1200px) を使用する。
+            // 拡大プレビューでは FullSizeImageUrl (orig) を別途取得する
+            var mediaThumb = $"{baseUrl}?format={format}&name=medium";
 
             var media = post.Media.FirstOrDefault(x => x.Url == url);
             var altText = media?.AltText;
 
-            var thumb = new ThumbnailInfo(mediaOrig, mediaLarge)
+            var thumb = new ThumbnailInfo(mediaOrig, mediaThumb)
             {
                 TooltipText = altText ?? "",
                 FullSizeImageUrl = mediaOrig,
