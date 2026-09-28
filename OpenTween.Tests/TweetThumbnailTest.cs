@@ -190,6 +190,58 @@ namespace OpenTween
         }
 
         [Fact]
+        public async Task PrepareThumbnails_OverlappedSamePostTest()
+        {
+            var callCount = 0;
+            var thumbnailServiceMock = new Mock<IThumbnailService>();
+            thumbnailServiceMock
+                .Setup(
+                    x => x.GetThumbnailInfoAsync("http://slow.example.com/abcd", It.IsAny<PostClass>(), It.IsAny<CancellationToken>())
+                )
+                .Returns(async () =>
+                {
+                    // 1回目の呼び出しの方が先に完了する
+                    var delay = Interlocked.Increment(ref callCount) == 1 ? 50 : 300;
+                    await Task.Delay(delay);
+                    return new ThumbnailInfo("http://slow.example.com/abcd", "http://slow.example.com/abcd")
+                    {
+                        Loader = new SlowThumbnailLoader(),
+                    };
+                });
+
+            var thumbnailGenerator = this.CreateThumbnailGenerator();
+            thumbnailGenerator.Services.Add(thumbnailServiceMock.Object);
+
+            var tweetThumbnail = new TweetThumbnail();
+            tweetThumbnail.Initialize(thumbnailGenerator);
+
+            var loadTasks = new System.Collections.Generic.List<Task<MemoryImage>>();
+            tweetThumbnail.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(TweetThumbnail.ThumbnailAvailable) && tweetThumbnail.ThumbnailAvailable)
+                    loadTasks.Add(tweetThumbnail.LoadSelectedThumbnail());
+            };
+
+            var post = new PostClass
+            {
+                StatusId = new TwitterStatusId("100"),
+                Media = new() { new("http://slow.example.com/abcd") },
+            };
+
+            // 同じ発言に対する準備が重複して実行された場合
+            var task1 = tweetThumbnail.PrepareThumbnails(post, CancellationToken.None);
+            var task2 = tweetThumbnail.PrepareThumbnails(post, CancellationToken.None);
+            await Task.WhenAll(task1, task2);
+
+            Assert.True(tweetThumbnail.ThumbnailAvailable);
+
+            // 表示開始時に読み込みを開始した画像が、古い方の準備の完了によってキャンセルされないこと
+            var loadTask = Assert.Single(loadTasks);
+            using var image = await loadTask;
+            Assert.NotNull(image);
+        }
+
+        [Fact]
         public async Task LoadSelectedThumbnail_Test()
         {
             using var image = TestUtils.CreateDummyImage();
@@ -406,6 +458,15 @@ namespace OpenTween
         {
             public Task<MemoryImage> Load(HttpClient http, CancellationToken cancellationToken)
                 => Task.FromResult(TestUtils.CreateDummyImage());
+        }
+
+        private class SlowThumbnailLoader : IThumbnailLoader
+        {
+            public async Task<MemoryImage> Load(HttpClient http, CancellationToken cancellationToken)
+            {
+                await Task.Delay(500, cancellationToken);
+                return TestUtils.CreateDummyImage();
+            }
         }
     }
 }

@@ -36,8 +36,8 @@ namespace OpenTween
     {
         private ThumbnailGenerator? thumbGenerator;
         private bool thumbnailAvailable;
-        private PostId? currentPostId;
         private PostId? loadedPostId;
+        private int prepareRequestId = 0;
         private ThumbnailInfo[] thumbnails = Array.Empty<ThumbnailInfo>();
         private Task<MemoryImage>?[] loadImageTasks = Array.Empty<Task<MemoryImage>?>();
         private CancellationTokenSource loadImageCts = new();
@@ -84,11 +84,14 @@ namespace OpenTween
         {
             // 準備が完了している場合のみスキップする。
             // 準備中にキャンセル・失敗した場合に同じ発言を再選択しても読み込まれなくなるのを防ぐため、
-            // 準備中の発言 (currentPostId) では判定しない
+            // 準備中の発言では判定しない
             if (this.loadedPostId == post.StatusId)
                 return;
 
-            this.currentPostId = post.StatusId;
+            // 同じ発言に対して準備が重複して実行された場合に、古い方の完了によって
+            // 新しい方で読み込みを開始したサムネイル画像が破棄されないよう、最新の呼び出しのみ結果を反映する
+            var requestId = ++this.prepareRequestId;
+
             this.loadedPostId = null;
             this.ThumbnailAvailable = false;
 
@@ -99,7 +102,7 @@ namespace OpenTween
 
             var thumbnails = (await this.GetThumbailInfoAsync(post, token)).ToArray();
 
-            if (this.currentPostId != post.StatusId)
+            if (requestId != this.prepareRequestId)
                 return;
 
             this.DisposeImages();
