@@ -70,6 +70,10 @@ namespace OpenTween.Api.DataModel
         [DataMember(Name = "friends_count")]
         public int FriendsCount { get; set; }
 
+        /// <summary>認証ユーザーがこのユーザーをフォローしているか (不明な場合は null)</summary>
+        [DataMember(Name = "following", IsRequired = false)]
+        public bool? Following { get; set; }
+
         [DataMember(Name = "id_str")]
         public string IdStr { get; set; }
 

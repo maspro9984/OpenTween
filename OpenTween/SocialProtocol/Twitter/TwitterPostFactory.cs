@@ -195,6 +195,7 @@ namespace OpenTween.SocialProtocol.Twitter
                 ImageUrl = imageUrl,
                 IsProtect = originalStatusUser.Protected,
                 IsOwl = isOwl,
+                IsAuthorFollowed = originalStatusUser.Following,
 
                 // retweetedStatus から生成
                 RetweetedId = retweetedStatus != null ? new TwitterStatusId(retweetedStatus.IdStr) : null,

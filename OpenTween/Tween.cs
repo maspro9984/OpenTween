@@ -316,6 +316,9 @@ namespace OpenTween
             this.tweetThumbnail1.Model.Initialize(this.thumbGenerator);
             this.tweetThumbnail1.ImageCache = this.thumbnailImageCache;
 
+            // タブ毎の表示フィルタ (RT・広告・フォロー外・非表示カテゴリ)
+            this.InitializeHideFilter();
+
             // ハッシュタグ/@id関連
             this.AtIdSupl = new AtIdSupplement(this.settings.AtIdList.AtIdList, "@");
             this.HashSupl = new AtIdSupplement(this.settings.Common.HashTags, "#");
@@ -5341,6 +5344,7 @@ namespace OpenTween
                     Protected = tab.Protected,
                     Notify = tab.Notify,
                     SoundFile = tab.SoundFile,
+                    HideSettings = tab.HideSettings.HasAnyCondition ? tab.HideSettings.Clone() : null,
                 };
 
                 switch (tab)

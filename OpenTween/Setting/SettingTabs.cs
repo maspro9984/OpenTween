@@ -105,6 +105,9 @@ namespace OpenTween
             /// 表示するリスト (<see cref="MyCommon.TabUsageType.Lists"/> で使用)
             /// </summary>
             public SettingTabListElement? ListInfo { get; set; }
+
+            /// <summary>タブ毎の非表示設定 (RT・広告・フォロー外・非表示カテゴリ)</summary>
+            public TabHideSettings? HideSettings { get; set; }
         }
 
         [XmlType("ListElement")]

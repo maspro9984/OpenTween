@@ -53,6 +53,19 @@ namespace OpenTween.Api.GraphQL
         }
 
         [Fact]
+        public void ToTwitterUser_FollowingTest()
+        {
+            var userElm = this.LoadResponseDocument("User_Simple.json");
+
+            // フォローしていない場合は following 要素自体が省略される
+            userElm.Element("legacy")?.Element("following")?.Remove();
+            Assert.False(new TwitterGraphqlUser(userElm).ToTwitterUser().Following);
+
+            userElm.Element("legacy")!.Add(new XElement("following", new XAttribute("type", "boolean"), "true"));
+            Assert.True(new TwitterGraphqlUser(userElm).ToTwitterUser().Following);
+        }
+
+        [Fact]
         public void ToTwitterUser_EntityWithoutDisplayUrlTest()
         {
             var userElm = this.LoadResponseDocument("User_EntityWithoutDisplayUrl.json");

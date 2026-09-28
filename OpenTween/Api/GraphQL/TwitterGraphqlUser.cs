@@ -82,6 +82,9 @@ namespace OpenTween.Api.GraphQL
                 CreatedAt = GetText(userLegacyElm, "created_at"),
                 FollowersCount = int.Parse(GetText(userLegacyElm, "followers_count")),
                 FriendsCount = int.Parse(GetText(userLegacyElm, "friends_count")),
+                // GraphQL のレスポンスではフォローしている場合のみ "following": true が含まれ、
+                // フォローしていない場合は要素自体が省略される
+                Following = GetTextOrNull(userLegacyElm, "following") == "true",
                 FavouritesCount = int.Parse(GetText(userLegacyElm, "favourites_count")),
                 StatusesCount = int.Parse(GetText(userLegacyElm, "statuses_count")),
                 Description = GetTextOrNull(userLegacyElm, "description"),

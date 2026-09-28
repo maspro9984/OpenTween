@@ -172,6 +172,9 @@ namespace OpenTween.Models
 
         public bool IsOwl { get; set; }
 
+        /// <summary>発言者 (リツイートの場合は元の発言者) を認証ユーザーがフォローしているか。不明な場合は null</summary>
+        public bool? IsAuthorFollowed { get; set; }
+
         public bool IsMark { get; set; }
 
         public bool IsDeleted { get; set; }

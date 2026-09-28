@@ -70,7 +70,14 @@ namespace OpenTween.Models
         public virtual ConcurrentDictionary<PostId, PostClass> Posts
             => TabInformations.GetInstance().Posts;
 
-        public int AllCount => this.ids.Count;
+        /// <summary>一覧に表示される発言の件数 (非表示設定により隠されている発言は含まない)</summary>
+        public int AllCount => this.ViewIds.Count;
+
+        /// <summary>非表示設定により隠されている発言も含めた、タブに属する発言の件数</summary>
+        public int TotalCount => this.ids.Count;
+
+        /// <summary>タブ毎の非表示設定</summary>
+        public TabHideSettings HideSettings { get; set; } = new();
 
         public PostId[] StatusIds => this.ids.ToArray();
 
@@ -125,6 +132,17 @@ namespace OpenTween.Models
             => this.updateCount;
 
         private IndexedSortedSet<PostId> ids = new();
+
+        /// <summary>
+        /// 非表示設定が有効な場合に一覧へ表示する発言の ID。非表示設定が無い場合は null
+        /// </summary>
+        /// <remarks>
+        /// タブへの所属 (<see cref="Contains"/>) や既読状態は <see cref="ids"/> で管理し、
+        /// 一覧の表示 (インデックスによるアクセスや件数) のみこちらを使用する
+        /// </remarks>
+        private IndexedSortedSet<PostId>? visibleIds;
+        private Func<PostClass, bool>? hideFilter;
+        private IComparer<PostId> idComparer = Comparer<PostId>.Default;
         private ConcurrentQueue<TemporaryId> addQueue = new();
         private readonly ConcurrentQueue<PostId> removeQueue = new();
         private SortedSet<PostId> unreadIds = new();
@@ -132,6 +150,9 @@ namespace OpenTween.Models
         private int updateCount = 0;
 
         private readonly object lockObj = new();
+
+        private IndexedSortedSet<PostId> ViewIds
+            => this.visibleIds ?? this.ids;
 
         protected TabModel(string tabName)
             => this.TabName = tabName;
@@ -160,7 +181,49 @@ namespace OpenTween.Models
             if (!read)
                 this.unreadIds.Add(statusId);
 
+            if (this.visibleIds != null && !this.IsHidden(statusId))
+                this.visibleIds.Add(statusId);
+
             return true;
+        }
+
+        /// <summary>
+        /// 一覧に表示しない発言を判定する関数を設定し、表示する発言を再計算する
+        /// </summary>
+        /// <param name="hideFilter">発言を表示しない場合に true を返す関数。null の場合は全ての発言を表示する</param>
+        public void SetHideFilter(Func<PostClass, bool>? hideFilter)
+        {
+            this.hideFilter = hideFilter;
+            this.RebuildVisibleIds();
+        }
+
+        private bool IsHidden(PostId statusId)
+        {
+            if (this.hideFilter == null)
+                return false;
+
+            // 発言が見つからない場合は隠さない
+            if (!this.Posts.TryGetValue(statusId, out var post))
+                return false;
+
+            return this.hideFilter(post);
+        }
+
+        private void RebuildVisibleIds()
+        {
+            if (this.hideFilter == null)
+            {
+                this.visibleIds = null;
+            }
+            else
+            {
+                var visible = this.ids.Where(x => !this.IsHidden(x));
+                this.visibleIds = new IndexedSortedSet<PostId>(visible, this.idComparer);
+            }
+
+            // 表示されなくなった発言は選択状態から外す
+            if (this.visibleIds != null)
+                this.selectedStatusIds = this.selectedStatusIds.Where(x => this.visibleIds.Contains(x)).ToList();
         }
 
         public IReadOnlyList<PostId> AddSubmit()
@@ -184,6 +247,7 @@ namespace OpenTween.Models
             if (!this.ids.Remove(statusId))
                 return false;
 
+            this.visibleIds?.Remove(statusId);
             this.unreadIds.Remove(statusId);
             this.selectedStatusIds.Remove(statusId);
             return true;
@@ -233,6 +297,7 @@ namespace OpenTween.Models
         public virtual void ClearIDs()
         {
             this.ids.Clear();
+            this.visibleIds?.Clear();
             this.unreadIds.Clear();
             this.selectedStatusIds.Clear();
 
@@ -283,8 +348,12 @@ namespace OpenTween.Models
 
             var comparer = Comparer<PostId>.Create(comparison);
 
+            this.idComparer = comparer;
             this.ids = new IndexedSortedSet<PostId>(this.ids, comparer);
             this.unreadIds = new SortedSet<PostId>(this.unreadIds, comparer);
+
+            if (this.visibleIds != null)
+                this.visibleIds = new IndexedSortedSet<PostId>(this.visibleIds, comparer);
         }
 
         /// <summary>
@@ -303,7 +372,19 @@ namespace OpenTween.Models
 
                 // unreadIds はリストのインデックス番号順に並んでいるため、
                 // 例えば ID 順の整列であれば昇順なら上から、降順なら下から順に返せば過去→現在の順になる
-                return this.SortOrder == SortOrder.Ascending ? this.unreadIds.Min : this.unreadIds.Max;
+                if (this.visibleIds == null)
+                    return this.SortOrder == SortOrder.Ascending ? this.unreadIds.Min : this.unreadIds.Max;
+
+                // 非表示の発言は未読として扱わない
+                var visibleIds = this.visibleIds;
+                var ordered = this.SortOrder == SortOrder.Ascending ? this.unreadIds : this.unreadIds.Reverse();
+                foreach (var unreadId in ordered)
+                {
+                    if (visibleIds.Contains(unreadId))
+                        return unreadId;
+                }
+
+                return null;
             }
         }
 
@@ -331,7 +412,12 @@ namespace OpenTween.Models
                 if (!this.UnreadManage || !SettingManager.Instance.Common.UnreadManage)
                     return 0;
 
-                return this.unreadIds.Count;
+                // 非表示の発言は未読件数に含めない
+                var visibleIds = this.visibleIds;
+                if (visibleIds == null)
+                    return this.unreadIds.Count;
+
+                return this.unreadIds.Count(x => visibleIds.Contains(x));
             }
         }
 
@@ -407,7 +493,7 @@ namespace OpenTween.Models
             => indexes.Select(x => this.GetStatusIdAt(x)).ToArray();
 
         public PostId GetStatusIdAt(int index)
-            => this.ids[index];
+            => this.ViewIds[index];
 
         public int[] IndexOf(PostId[] statusIds)
         {
@@ -418,7 +504,7 @@ namespace OpenTween.Models
         }
 
         public int IndexOf(PostId statusId)
-            => this.ids.IndexOf(statusId);
+            => this.ViewIds.IndexOf(statusId);
 
         public IEnumerable<int> SearchPostsAll(Func<string, bool> stringComparer)
             => this.SearchPostsAll(stringComparer, reverse: false);

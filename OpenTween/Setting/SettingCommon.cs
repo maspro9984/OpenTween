@@ -32,6 +32,7 @@ using System.ComponentModel;
 using System.Windows.Forms;
 using System.Xml.Serialization;
 using OpenTween.Connection;
+using OpenTween.Models;
 using OpenTween.SocialProtocol.Twitter;
 using OpenTween.Thumbnail;
 
@@ -185,6 +186,9 @@ namespace OpenTween
         public string Language = "OS";
         public bool Nicoms = false;
         public List<string> HashTags = new();
+
+        /// <summary>非表示カテゴリ (タブ毎の非表示設定で選択して、登録したユーザーの発言をまとめて隠す)</summary>
+        public List<HideCategory> HideCategories = new();
         public string HashSelected = "";
         public bool HashIsPermanent = false;
         public bool HashIsHead = false;

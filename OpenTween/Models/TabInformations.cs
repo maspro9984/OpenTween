@@ -155,10 +155,10 @@ namespace OpenTween.Models
                     var homeTab = this.HomeTab;
                     var dmTab = this.DirectMessageTab;
 
-                    for (var idx = 0; idx < tb.AllCount; ++idx)
+                    // 非表示設定により一覧に表示されていない発言も含めて処理する
+                    foreach (var id in tb.StatusIds)
                     {
                         var exist = false;
-                        var id = tb.GetStatusIdAt(idx);
                         foreach (var tab in this.Tabs)
                         {
                             if (tab != tb && tab != dmTab)
@@ -280,6 +280,7 @@ namespace OpenTween.Models
             tab.Protected = tabSetting.Protected;
             tab.Notify = tabSetting.Notify;
             tab.SoundFile = tabSetting.SoundFile;
+            tab.HideSettings = tabSetting.HideSettings?.Clone() ?? new();
 
             if (tab is FilterTabModel filterTab)
             {
@@ -647,6 +648,15 @@ namespace OpenTween.Models
                 this.quotes[item.StatusId] = item;
                 return true;
             }
+        }
+
+        /// <summary>
+        /// タブの一覧に表示しない発言を判定する関数を設定する
+        /// </summary>
+        public void SetHideFilter(TabModel tab, Func<PostClass, bool>? hideFilter)
+        {
+            lock (this.lockObj)
+                tab.SetHideFilter(hideFilter);
         }
 
         /// <summary>
