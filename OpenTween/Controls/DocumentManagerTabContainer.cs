@@ -355,6 +355,12 @@ namespace OpenTween.Controls
                 return;
             }
 
+            this.ActivateTab(tabName);
+        }
+
+        /// <summary>指定したタブを現在のタブとし、TabSelecting / SelectedTabChanged イベントを発生させる</summary>
+        private void ActivateTab(string tabName)
+        {
             // TabSelecting ハンドラー内で CurrentTab / CurrentTabName が参照される場合に
             // 正しい（新しい）タブ名が返るよう、先に currentActiveTabName を更新する
             var oldActiveTabName = this.currentActiveTabName;
@@ -448,6 +454,36 @@ namespace OpenTween.Controls
 
             // timelineTabContainer 参照を更新
             this.UpdateTimelineTabContainerReference();
+
+            // 復元中は ActivePanelChanged を抑制しているため、画面上で前面に表示されているタブと
+            // currentActiveTabName がずれたままになる。この状態で発言を選択すると、選択イベントが
+            // 現在のタブのものではないとして無視され、詳細表示やサムネイルが更新されないため同期させる
+            this.SyncActiveTabWithVisiblePanel();
+        }
+
+        private void SyncActiveTabWithVisiblePanel()
+        {
+            var tabName = this.FindVisibleTabName(this.dockManager.ActivePanel)
+                ?? this.FindVisibleTabName(this.timelineTabContainer);
+
+            // currentActiveTabName が一致していても、呼び出し元が保持している選択中のタブとは
+            // ずれている可能性があるため、常に選択イベントを発生させる
+            if (tabName == null)
+                return;
+
+            this.ActivateTab(tabName);
+        }
+
+        private string? FindVisibleTabName(DockPanel? panel)
+        {
+            if (panel == null)
+                return null;
+
+            var tabName = this.FindTabNameByPanel(panel);
+            if (tabName == null && panel.Tabbed && panel.ActiveChild != null)
+                tabName = this.FindTabNameByPanel(panel.ActiveChild);
+
+            return tabName;
         }
 
         /// <summary>
@@ -818,6 +854,12 @@ namespace OpenTween.Controls
             if (!this.ClientRectangle.Contains(localPos))
                 return false;
 
+            // パネルの中身 (投稿欄・発言一覧・詳細表示など) の右クリックはそれぞれのコントロールの
+            // コンテキストメニューに任せ、タブの見出し部分を右クリックした場合のみタブのメニューを表示する
+            var targetControl = Control.FromChildHandle(m.HWnd);
+            if (!this.IsTabHeaderCandidate(targetControl))
+                return false;
+
             // タブ名を特定: まずクリック位置のパネルを試みる
             string? tabName = null;
             var panel = this.dockManager.GetDockPanelAtPos(cursorPos);
@@ -857,8 +899,14 @@ namespace OpenTween.Controls
             }
 
             // 孤立パネルでない場合は現在アクティブなタブへフォールバック
+            // (詳細表示などタイムライン以外のパネルの見出しではタブのメニューを表示しない)
             if (tabName == null)
+            {
+                if (panel != null && !this.IsTimelinePanel(panel))
+                    return false;
+
                 tabName = this.currentActiveTabName;
+            }
 
             if (tabName == null)
                 return false;
@@ -869,6 +917,48 @@ namespace OpenTween.Controls
 
             // false を返して DevExpress にもメッセージを渡す（タブ選択動作などを維持）
             // PopupMenuShowing ハンドラーで DevExpress 標準ポップアップはキャンセルされる
+            return false;
+        }
+
+        /// <summary>
+        /// 右クリックされたコントロールがタブの見出し部分である可能性があるか
+        /// </summary>
+        /// <remarks>
+        /// DockPanel の中身 (ControlContainer 内) や、このコンテナの外にあるコントロールは対象外とする
+        /// </remarks>
+        private bool IsTabHeaderCandidate(Control? control)
+        {
+            for (var current = control; current != null; current = current.Parent)
+            {
+                if (current is ControlContainer)
+                    return false;
+
+                // フローティング状態のパネルはこのコンテナの子孫にならないため DockPanel でも判定する
+                if (current is DockPanel || current == this)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>タイムラインのタブ、またはタイムラインのタブをまとめたコンテナであるか</summary>
+        private bool IsTimelinePanel(DockPanel panel)
+        {
+            if (panel == this.timelineTabContainer)
+                return true;
+
+            if (this.FindTabNameByPanel(panel) != null)
+                return true;
+
+            if (panel.Tabbed)
+            {
+                for (var i = 0; i < panel.Count; i++)
+                {
+                    if (this.FindTabNameByPanel(panel[i]) != null)
+                        return true;
+                }
+            }
+
             return false;
         }
 
