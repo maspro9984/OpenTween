@@ -1576,6 +1576,13 @@ namespace OpenTween
 
                 p.Report(Properties.Resources.PostWorker_RunWorkerCompletedText4);
             }
+            catch (TwitterApiException ex) when (ex.Errors.Any(x => x.Code == TwitterErrorCode.DuplicateStatus))
+            {
+                // 投稿自体は完了しているにも関わらず重複エラーが返される場合があるため、
+                // 投稿失敗 (再試行の確認・入力内容の復元) としては扱わず警告の表示のみ行う
+                errMsg = $"Warn:{ex.Message} 既に投稿済みの可能性があります(PostMessage)";
+                p.Report(errMsg);
+            }
             catch (WebApiException ex)
             {
                 // 処理は中断せずエラーの表示のみ行う

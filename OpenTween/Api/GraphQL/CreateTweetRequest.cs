@@ -26,6 +26,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using System.Xml.XPath;
 using OpenTween.Api.DataModel;
 using OpenTween.Connection;
@@ -162,11 +163,43 @@ namespace OpenTween.Api.GraphQL
             var rootElm = await response.ReadAsJsonXml()
                 .ConfigureAwait(false);
 
+            ThrowIfDuplicateStatus(rootElm);
             ErrorResponse.ThrowIfError(rootElm);
 
             var tweetElm = rootElm.XPathSelectElement("/data/create_tweet/tweet_results/result") ?? throw CreateParseError();
 
             return TimelineTweet.ParseTweet(tweetElm);
+        }
+
+        /// <summary>
+        /// 重複した投稿のエラー (187) を <see cref="TwitterErrorCode.DuplicateStatus"/> を含む <see cref="TwitterApiException"/> として送出する
+        /// </summary>
+        /// <remarks>
+        /// 投稿自体は完了しているにも関わらずこのエラーが返される場合があるため、呼び出し側でエラーコードにより判別できるようにする
+        /// </remarks>
+        private static void ThrowIfDuplicateStatus(XElement rootElm)
+        {
+            if (rootElm.Element("data")?.HasElements == true)
+                return;
+
+            var duplicateErrorElm = rootElm.XPathSelectElements("/errors/item")
+                .FirstOrDefault(x => x.Element("code")?.Value == ((int)TwitterErrorCode.DuplicateStatus).ToString());
+
+            if (duplicateErrorElm == null)
+                return;
+
+            var error = new TwitterError
+            {
+                Errors = new[]
+                {
+                    new TwitterErrorItem
+                    {
+                        Code = TwitterErrorCode.DuplicateStatus,
+                        Message = duplicateErrorElm.Element("message")?.Value ?? "Status is a duplicate.",
+                    },
+                },
+            };
+            throw new TwitterApiException(0, error, JsonUtils.JsonXmlToString(rootElm));
         }
 
         private static Exception CreateParseError()

@@ -21,6 +21,7 @@
 
 using System.Threading.Tasks;
 using Moq;
+using OpenTween.Api.DataModel;
 using OpenTween.Connection;
 using OpenTween.SocialProtocol.Twitter;
 using Xunit;
@@ -107,6 +108,28 @@ namespace OpenTween.Api.GraphQL
                 MediaIds = new TwitterMediaId[] { new("11111"), new("22222") },
             };
             await request.Send(mock.Object);
+            mock.VerifyAll();
+        }
+
+        [Fact]
+        public async Task Send_DuplicateStatusTest()
+        {
+            using var apiResponse = await TestUtils.CreateApiResponse("Resources/Responses/CreateTweet_DuplicateStatus.json");
+
+            var mock = new Mock<IApiConnection>();
+            mock.Setup(x =>
+                    x.SendAsync(It.IsAny<IHttpRequest>())
+                )
+                .ReturnsAsync(apiResponse);
+
+            var request = new CreateTweetRequest
+            {
+                TweetText = "tetete",
+            };
+
+            var ex = await Assert.ThrowsAsync<TwitterApiException>(() => request.Send(mock.Object));
+            Assert.Contains(ex.Errors, x => x.Code == TwitterErrorCode.DuplicateStatus);
+
             mock.VerifyAll();
         }
     }
