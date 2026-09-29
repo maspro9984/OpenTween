@@ -40,6 +40,7 @@ namespace OpenTween
         private int prepareRequestId = 0;
         private ThumbnailInfo[] thumbnails = Array.Empty<ThumbnailInfo>();
         private Task<MemoryImage>?[] loadImageTasks = Array.Empty<Task<MemoryImage>?>();
+        private DownloadProgress?[] loadProgresses = Array.Empty<DownloadProgress?>();
         private CancellationTokenSource loadImageCts = new();
         private int selectedIndex = 0;
 
@@ -74,6 +75,23 @@ namespace OpenTween
         public ThumbnailInfo CurrentThumbnail
             => this.Thumbnails[this.selectedIndex];
 
+        /// <summary>選択中のサムネイル画像の読み込みの進捗状況。読み込み中でない場合は null</summary>
+        /// <remarks>
+        /// 値の変化は PropertyChanged イベントで通知される（UI スレッド以外から発生する場合がある）
+        /// </remarks>
+        public DownloadProgress? CurrentLoadProgress
+        {
+            get
+            {
+                if (!this.ThumbnailAvailable)
+                    return null;
+
+                var progresses = this.loadProgresses;
+                var index = this.selectedIndex;
+                return index < progresses.Length ? progresses[index] : null;
+            }
+        }
+
         private ThumbnailGenerator ThumbGenerator
             => this.thumbGenerator ?? throw this.NotInitializedException();
 
@@ -99,6 +117,7 @@ namespace OpenTween
             this.DisposeImages();
             this.thumbnails = Array.Empty<ThumbnailInfo>();
             this.loadImageTasks = Array.Empty<Task<MemoryImage>?>();
+            this.loadProgresses = Array.Empty<DownloadProgress?>();
 
             var thumbnails = (await this.GetThumbailInfoAsync(post, token)).ToArray();
 
@@ -109,6 +128,7 @@ namespace OpenTween
             this.SelectedIndex = 0;
             this.thumbnails = thumbnails;
             this.loadImageTasks = new Task<MemoryImage>?[thumbnails.Length];
+            this.loadProgresses = new DownloadProgress?[thumbnails.Length];
             this.loadedPostId = post.StatusId;
 
             if (thumbnails.Length > 0)
@@ -123,12 +143,37 @@ namespace OpenTween
             if (runningTask != null && !runningTask.IsFaulted && !runningTask.IsCanceled)
                 return runningTask;
 
-            var thumbnail = this.thumbnails[this.selectedIndex];
+            var index = this.selectedIndex;
+            var thumbnail = this.thumbnails[index];
+            var progresses = this.loadProgresses;
+            var progress = new CallbackProgress<DownloadProgress>(x => this.UpdateLoadProgress(progresses, index, x));
             var token = this.loadImageCts.Token;
-            var newTask = Task.Run(() => thumbnail.LoadThumbnailImageAsync(token), token);
-            this.loadImageTasks[this.selectedIndex] = newTask;
+
+            this.UpdateLoadProgress(progresses, index, new(0, null));
+
+            var newTask = Task.Run(() => thumbnail.LoadThumbnailImageAsync(progress, token), token);
+            this.loadImageTasks[index] = newTask;
+
+            // 成功・失敗に関わらず読み込みが終了したら進捗状況の表示を消す
+            _ = newTask.ContinueWith(
+                _ => this.UpdateLoadProgress(progresses, index, null),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
 
             return newTask;
+        }
+
+        private void UpdateLoadProgress(DownloadProgress?[] progresses, int index, DownloadProgress? value)
+        {
+            // 別の発言に切り替わった後に届いた通知は無視する
+            if (!ReferenceEquals(progresses, this.loadProgresses))
+                return;
+
+            progresses[index] = value;
+
+            if (index == this.selectedIndex)
+                this.RaisePropertyChanged(nameof(this.CurrentLoadProgress));
         }
 
         public string GetUrlForImageSearch()
@@ -181,6 +226,24 @@ namespace OpenTween
 
             var oldImageTasks = this.loadImageTasks.OfType<Task<MemoryImage>>().ToArray();
             _ = AsyncExceptionBoundary.IgnoreExceptionAndDispose(oldImageTasks);
+        }
+
+        /// <summary>
+        /// 通知を呼び出し元のスレッドで同期的に処理する <see cref="IProgress{T}"/>
+        /// </summary>
+        /// <remarks>
+        /// <see cref="Progress{T}"/> は生成時の SynchronizationContext に通知を送るため、
+        /// スレッドプールから呼ばれる場合に通知の順序が保証されない。そのためこちらを使用する
+        /// </remarks>
+        private sealed class CallbackProgress<T> : IProgress<T>
+        {
+            private readonly Action<T> handler;
+
+            public CallbackProgress(Action<T> handler)
+                => this.handler = handler;
+
+            public void Report(T value)
+                => this.handler(value);
         }
     }
 }

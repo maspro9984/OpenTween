@@ -32,7 +32,9 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
+using OpenTween.Thumbnail;
 
 namespace OpenTween
 {
@@ -241,6 +243,37 @@ namespace OpenTween
             await stream.CopyToAsync(memstream)
                 .ConfigureAwait(false);
 
+            return await CreateFromMemoryStreamAsync(memstream)
+                .ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// 指定された Stream から MemoryImage を非同期に作成し、読み込みの進捗状況を通知します。
+        /// </summary>
+        /// <param name="stream">読み込む対象となる Stream</param>
+        /// <param name="totalBytes">Stream の全体のバイト数（不明な場合は null）</param>
+        /// <param name="progress">進捗状況の通知先</param>
+        /// <param name="cancellationToken">キャンセル通知</param>
+        /// <returns>作成された MemoryImage を返すタスク</returns>
+        /// <exception cref="InvalidImageException">不正な画像データが入力された場合</exception>
+        public static async Task<MemoryImage> CopyFromStreamAsync(
+            Stream stream,
+            long? totalBytes,
+            IProgress<DownloadProgress>? progress,
+            CancellationToken cancellationToken)
+        {
+            var capacity = totalBytes is > 0 and <= int.MaxValue ? (int)totalBytes : 0;
+            using var memstream = new MemoryStream(capacity);
+
+            await DownloadProgress.CopyWithProgressAsync(stream, memstream, totalBytes, progress, cancellationToken)
+                .ConfigureAwait(false);
+
+            return await CreateFromMemoryStreamAsync(memstream)
+                .ConfigureAwait(false);
+        }
+
+        private static async Task<MemoryImage> CreateFromMemoryStreamAsync(MemoryStream memstream)
+        {
             var ret = memstream.TryGetBuffer(out var buffer);
             Debug.Assert(ret, "TryGetBuffer() == true");
 

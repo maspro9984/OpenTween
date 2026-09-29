@@ -63,7 +63,7 @@ namespace OpenTween.Thumbnail.Services
             };
         }
 
-        public class ThumbnailLoader : IThumbnailLoader
+        public class ThumbnailLoader : IProgressReportingThumbnailLoader
         {
             private readonly Uri mediaPageUri;
             private readonly Uri thumbnailImageUri;
@@ -74,22 +74,17 @@ namespace OpenTween.Thumbnail.Services
                 this.thumbnailImageUri = thumbnailImageUri;
             }
 
-            public async Task<MemoryImage> Load(HttpClient http, CancellationToken cancellationToken)
+            public Task<MemoryImage> Load(HttpClient http, CancellationToken cancellationToken)
+                => this.Load(http, null, cancellationToken);
+
+            public async Task<MemoryImage> Load(HttpClient http, IProgress<DownloadProgress>? progress, CancellationToken cancellationToken)
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, this.thumbnailImageUri);
+                using var request = new HttpRequestMessage(HttpMethod.Get, this.thumbnailImageUri);
 
                 request.Headers.Add("User-Agent", Networking.GetUserAgentString(fakeMSIE: true));
                 request.Headers.Referrer = this.mediaPageUri;
 
-                using var response = await http.SendAsync(request, cancellationToken)
-                    .ConfigureAwait(false);
-
-                response.EnsureSuccessStatusCode();
-
-                using var imageStream = await response.Content.ReadAsStreamAsync()
-                    .ConfigureAwait(false);
-
-                return await MemoryImage.CopyFromStreamAsync(imageStream)
+                return await SimpleThumbnailLoader.LoadWithProgressAsync(http, request, progress, cancellationToken)
                     .ConfigureAwait(false);
             }
         }

@@ -94,6 +94,8 @@ namespace OpenTween
             this.loadCts = cts;
             var token = cts.Token;
 
+            this.pictureBox.LoadingProgress = null;
+
             // キャッシュチェック（ヒットした場合は即座に表示）
             if (imageUrl != null && this.ImageCache?.TryGet(imageUrl) is { } cachedImage)
             {
@@ -106,8 +108,17 @@ namespace OpenTween
             var needsFullSizeLoad = imageUrl != null &&
                 (thumbnailImageTask == null || thumbnail.Loader != null || imageUrl != thumbnail.ThumbnailImageUrl);
 
+            // フルサイズ画像の読み込み状況をプレビュー上に表示する。
+            // Progress<T> の通知は UI スレッドに非同期で届くため、読み込み終了後に届いた通知は無視する
+            var fullSizeLoading = true;
+            var progress = new Progress<DownloadProgress>(x =>
+            {
+                if (fullSizeLoading && !token.IsCancellationRequested)
+                    this.pictureBox.LoadingProgress = x;
+            });
+
             var fullSizeTask = needsFullSizeLoad
-                ? Task.Run(() => this.LoadImageAsync(imageUrl!, token), token)
+                ? Task.Run(() => this.LoadImageAsync(imageUrl!, progress, token), token)
                 : null;
 
             // フルサイズ画像の取得には時間が掛かる（または失敗する）場合があるため、
@@ -144,7 +155,17 @@ namespace OpenTween
 
             try
             {
-                var image = await fullSizeTask;
+                MemoryImage image;
+                try
+                {
+                    image = await fullSizeTask;
+                }
+                finally
+                {
+                    fullSizeLoading = false;
+                    if (!token.IsCancellationRequested)
+                        this.pictureBox.LoadingProgress = null;
+                }
 
                 if (token.IsCancellationRequested)
                 {
@@ -227,10 +248,10 @@ namespace OpenTween
             this.zoomScale = Math.Max(0.1, Math.Min((double)displayWidth / this.originalImageSize.Width, 5.0));
         }
 
-        private async Task<MemoryImage> LoadImageAsync(string imageUrl, CancellationToken token)
+        private async Task<MemoryImage> LoadImageAsync(string imageUrl, IProgress<DownloadProgress>? progress, CancellationToken token)
         {
             var loader = new SimpleThumbnailLoader(imageUrl);
-            return await loader.Load(Networking.Http, token).ConfigureAwait(false);
+            return await loader.Load(Networking.Http, progress, token).ConfigureAwait(false);
         }
 
         private void AdjustSizeAndPosition(Size imageSize, Point cursorPosition)
@@ -338,6 +359,7 @@ namespace OpenTween
         public void HidePreview()
         {
             this.loadCts?.Cancel();
+            this.pictureBox.LoadingProgress = null;
             this.IsMouseOver = false;
             this.Hide();
         }

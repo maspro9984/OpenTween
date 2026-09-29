@@ -21,6 +21,7 @@
 
 #nullable enable
 
+using System;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,5 +31,11 @@ namespace OpenTween.Thumbnail
     public interface IThumbnailLoader
     {
         public Task<MemoryImage> Load(HttpClient http, CancellationToken cancellationToken);
+    }
+
+    /// <summary>ダウンロードの進捗状況を通知できる <see cref="IThumbnailLoader"/></summary>
+    public interface IProgressReportingThumbnailLoader : IThumbnailLoader
+    {
+        public Task<MemoryImage> Load(HttpClient http, IProgress<DownloadProgress>? progress, CancellationToken cancellationToken);
     }
 }

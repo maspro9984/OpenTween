@@ -65,8 +65,14 @@ namespace OpenTween
             this.InitializeComponent();
             this.filter.Register(this.pictureBox);
 
-            this.Model.PropertyChanged +=
-                (s, e) => this.TryInvoke(() => this.Model_PropertyChanged(s, e));
+            this.Model.PropertyChanged += (s, e) =>
+            {
+                // 進捗状況の通知はダウンロード中に頻繁に発生するため、ダウンロード処理を待たせないよう非同期で反映する
+                if (e.PropertyName == nameof(TweetThumbnail.CurrentLoadProgress))
+                    this.BeginUpdateLoadProgress();
+                else
+                    this.TryInvoke(() => this.Model_PropertyChanged(s, e));
+            };
 
             this.pictureBox.MouseEnter += this.PictureBox_MouseEnter;
             this.pictureBox.MouseLeave += this.PictureBox_MouseLeave;
@@ -123,6 +129,7 @@ namespace OpenTween
                 this.previewForm?.HidePreview();
 
                 this.pictureBox.Image = null;
+                this.pictureBox.LoadingProgress = null;
                 this.pictureBox.AccessibleDescription = "";
                 this.toolTip.SetToolTip(this.pictureBox, "");
                 this.scrollBar.Visible = false;
@@ -140,10 +147,27 @@ namespace OpenTween
             this.pictureBox.PlayableMark = thumbnail.IsPlayable;
             this.pictureBox.AccessibleDescription = thumbnail.TooltipText;
             this.toolTip.SetToolTip(this.pictureBox, thumbnail.TooltipText);
+            this.pictureBox.LoadingProgress = this.Model.CurrentLoadProgress;
             _ = this.pictureBox.SetImageFromTask(this.Model.LoadSelectedThumbnail);
 
             // プレビューフォームが表示中なら画像を切り替える
             this.UpdatePreviewIfVisible();
+        }
+
+        private void BeginUpdateLoadProgress()
+        {
+            if (this.IsDisposed || !this.IsHandleCreated)
+                return;
+
+            try
+            {
+                // 通知が溜まっても最新の状態を反映できるよう、実行時点の値を参照する
+                this.BeginInvoke(new Action(() => this.pictureBox.LoadingProgress = this.Model.CurrentLoadProgress));
+            }
+            catch (InvalidOperationException)
+            {
+                // ハンドルが破棄された直後に呼ばれた場合は無視する
+            }
         }
 
         private async void UpdatePreviewIfVisible()

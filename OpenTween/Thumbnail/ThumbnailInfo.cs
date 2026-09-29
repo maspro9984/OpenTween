@@ -73,12 +73,24 @@ namespace OpenTween.Thumbnail
         public Task<MemoryImage> LoadThumbnailImageAsync(CancellationToken cancellationToken)
             => this.LoadThumbnailImageAsync(Networking.Http, cancellationToken);
 
-        public async Task<MemoryImage> LoadThumbnailImageAsync(HttpClient http, CancellationToken cancellationToken)
+        public Task<MemoryImage> LoadThumbnailImageAsync(HttpClient http, CancellationToken cancellationToken)
+            => this.LoadThumbnailImageAsync(http, null, cancellationToken);
+
+        public Task<MemoryImage> LoadThumbnailImageAsync(IProgress<DownloadProgress>? progress, CancellationToken cancellationToken)
+            => this.LoadThumbnailImageAsync(Networking.Http, progress, cancellationToken);
+
+        public async Task<MemoryImage> LoadThumbnailImageAsync(HttpClient http, IProgress<DownloadProgress>? progress, CancellationToken cancellationToken)
         {
             IThumbnailLoader CreateLoader()
                 => new SimpleThumbnailLoader(this.ThumbnailImageUrl ?? throw new InvalidOperationException($"{nameof(this.ThumbnailImageUrl)} is not set"));
 
             var loader = this.Loader ?? CreateLoader();
+
+            if (loader is IProgressReportingThumbnailLoader progressLoader)
+            {
+                return await progressLoader.Load(http, progress, cancellationToken)
+                    .ConfigureAwait(false);
+            }
 
             return await loader.Load(http, cancellationToken)
                 .ConfigureAwait(false);

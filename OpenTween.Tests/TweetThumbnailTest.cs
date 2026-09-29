@@ -454,6 +454,68 @@ namespace OpenTween
             Assert.Equal(0, tweetThumbnail.SelectedIndex);
         }
 
+        [Fact]
+        public async Task CurrentLoadProgress_Test()
+        {
+            var loader = new ProgressThumbnailLoader();
+
+            var thumbnailServiceMock = new Mock<IThumbnailService>();
+            thumbnailServiceMock
+                .Setup(
+                    x => x.GetThumbnailInfoAsync("http://example.com/abcd", It.IsAny<PostClass>(), It.IsAny<CancellationToken>())
+                )
+                .ReturnsAsync(new ThumbnailInfo("http://example.com/abcd", "http://example.com/abcd")
+                {
+                    Loader = loader,
+                });
+
+            var thumbnailGenerator = this.CreateThumbnailGenerator();
+            thumbnailGenerator.Services.Add(thumbnailServiceMock.Object);
+
+            var tweetThumbnail = new TweetThumbnail();
+            tweetThumbnail.Initialize(thumbnailGenerator);
+
+            var post = new PostClass
+            {
+                StatusId = new TwitterStatusId("100"),
+                Media = new() { new("http://example.com/abcd") },
+            };
+
+            await tweetThumbnail.PrepareThumbnails(post, CancellationToken.None);
+            Assert.Null(tweetThumbnail.CurrentLoadProgress);
+
+            var loadTask = tweetThumbnail.LoadSelectedThumbnail();
+            await loader.Reported.Task;
+
+            Assert.Equal(new DownloadProgress(100, 400), tweetThumbnail.CurrentLoadProgress);
+
+            loader.Completion.SetResult(TestUtils.CreateDummyImage());
+            using var image = await loadTask;
+
+            // 継続タスクで進捗状況がクリアされるのを待つ
+            for (var i = 0; i < 100 && tweetThumbnail.CurrentLoadProgress != null; i++)
+                await Task.Delay(10);
+
+            Assert.Null(tweetThumbnail.CurrentLoadProgress);
+        }
+
+        private class ProgressThumbnailLoader : IProgressReportingThumbnailLoader
+        {
+            public TaskCompletionSource<bool> Reported { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public TaskCompletionSource<MemoryImage> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            public Task<MemoryImage> Load(HttpClient http, CancellationToken cancellationToken)
+                => this.Load(http, null, cancellationToken);
+
+            public async Task<MemoryImage> Load(HttpClient http, IProgress<DownloadProgress> progress, CancellationToken cancellationToken)
+            {
+                progress?.Report(new(100, 400));
+                this.Reported.SetResult(true);
+                return await this.Completion.Task;
+            }
+        }
+
         private class FakeThumbnailLoader : IThumbnailLoader
         {
             public Task<MemoryImage> Load(HttpClient http, CancellationToken cancellationToken)

@@ -83,6 +83,24 @@ namespace OpenTween
 
         private bool playableMark = false;
 
+        /// <summary>画像の読み込みの進捗状況。null 以外が設定されている間はプログレスバーを重ねて描画する</summary>
+        [Browsable(false)]
+        [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+        public DownloadProgress? LoadingProgress
+        {
+            get => this.loadingProgress;
+            set
+            {
+                if (value == this.loadingProgress)
+                    return;
+
+                this.loadingProgress = value;
+                this.Invalidate();
+            }
+        }
+
+        private DownloadProgress? loadingProgress;
+
         [Localizable(true)]
         [DefaultValue(PictureBoxSizeMode.Normal)]
         public new PictureBoxSizeMode SizeMode
@@ -184,6 +202,8 @@ namespace OpenTween
 
                 // 動画なら再生ボタンを上から描画
                 this.DrawPlayableMark(pe);
+
+                this.DrawLoadingProgress(pe);
             }
             catch (ExternalException)
             {
@@ -214,6 +234,62 @@ namespace OpenTween
                 overlaySize);
 
             pe.Graphics.DrawImage(overlayImage, destRect, 0, 0, overlayImage.Width, overlayImage.Height, GraphicsUnit.Pixel);
+        }
+
+        /// <summary>読み込み中であれば、下端に進捗状況のテキストとプログレスバーを重ねて描画する</summary>
+        private void DrawLoadingProgress(PaintEventArgs pe)
+        {
+            if (this.LoadingProgress is not { } progress)
+                return;
+
+            var g = pe.Graphics;
+            var font = this.Font;
+            var text = progress.ToDisplayString();
+
+            var textSize = TextRenderer.MeasureText(g, text, font, Size.Empty, TextFormatFlags.NoPadding);
+            var padding = Math.Max(2, font.Height / 5);
+            var barHeight = Math.Max(3, font.Height / 3);
+            var panelHeight = textSize.Height + barHeight + padding * 3;
+
+            // 表示領域が狭すぎる場合はテキストを省略してバーのみ描画する
+            var showText = this.Height >= panelHeight * 2 && this.Width >= textSize.Width + padding * 2;
+            if (!showText)
+                panelHeight = barHeight + padding * 2;
+
+            var panelRect = new Rectangle(0, this.Height - panelHeight, this.Width, panelHeight);
+
+            using (var panelBrush = new SolidBrush(Color.FromArgb(160, Color.Black)))
+                g.FillRectangle(panelBrush, panelRect);
+
+            if (showText)
+            {
+                var textRect = new Rectangle(panelRect.X + padding, panelRect.Y + padding, panelRect.Width - padding * 2, textSize.Height);
+                TextRenderer.DrawText(g, text, font, textRect, Color.White, TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding | TextFormatFlags.EndEllipsis);
+            }
+
+            var barRect = new Rectangle(panelRect.X + padding, panelRect.Bottom - padding - barHeight, panelRect.Width - padding * 2, barHeight);
+            if (barRect.Width <= 0)
+                return;
+
+            using (var trackBrush = new SolidBrush(Color.FromArgb(96, Color.White)))
+                g.FillRectangle(trackBrush, barRect);
+
+            if (progress.Ratio is { } ratio)
+            {
+                var filledRect = barRect with { Width = (int)(barRect.Width * ratio) };
+                using var barBrush = new SolidBrush(Color.FromArgb(0x1D, 0x9B, 0xF0));
+                g.FillRectangle(barBrush, filledRect);
+            }
+            else
+            {
+                // 全体のサイズが不明な場合は、時間経過で左右に動くバーを描画する
+                var segmentWidth = Math.Max(barRect.Width / 4, 1);
+                var phase = Environment.TickCount / 8 % (barRect.Width + segmentWidth);
+                var x = barRect.X + phase - segmentWidth;
+                var segmentRect = Rectangle.Intersect(barRect, new Rectangle(x, barRect.Y, segmentWidth, barRect.Height));
+                using var barBrush = new SolidBrush(Color.FromArgb(0x1D, 0x9B, 0xF0));
+                g.FillRectangle(barBrush, segmentRect);
+            }
         }
 
         [Browsable(false)]

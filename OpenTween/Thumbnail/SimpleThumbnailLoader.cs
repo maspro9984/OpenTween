@@ -28,27 +28,23 @@ using System.Threading.Tasks;
 
 namespace OpenTween.Thumbnail
 {
-    public class SimpleThumbnailLoader : IThumbnailLoader
+    public class SimpleThumbnailLoader : IProgressReportingThumbnailLoader
     {
         private readonly string imageUrl;
 
         public SimpleThumbnailLoader(string imageUrl)
             => this.imageUrl = imageUrl;
 
-        public async Task<MemoryImage> Load(HttpClient http, CancellationToken cancellationToken)
+        public Task<MemoryImage> Load(HttpClient http, CancellationToken cancellationToken)
+            => this.Load(http, null, cancellationToken);
+
+        public async Task<MemoryImage> Load(HttpClient http, IProgress<DownloadProgress>? progress, CancellationToken cancellationToken)
         {
             MemoryImage? image = null;
             try
             {
-                using var response = await http.GetAsync(this.imageUrl, cancellationToken)
-                    .ConfigureAwait(false);
-
-                response.EnsureSuccessStatusCode();
-
-                using var imageStream = await response.Content.ReadAsStreamAsync()
-                    .ConfigureAwait(false);
-
-                image = await MemoryImage.CopyFromStreamAsync(imageStream)
+                using var request = new HttpRequestMessage(HttpMethod.Get, this.imageUrl);
+                image = await LoadWithProgressAsync(http, request, progress, cancellationToken)
                     .ConfigureAwait(false);
 
                 cancellationToken.ThrowIfCancellationRequested();
@@ -59,6 +55,44 @@ namespace OpenTween.Thumbnail
             {
                 image?.Dispose();
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// 指定されたリクエストで画像を取得する。本文の受信中は <paramref name="progress"/> に進捗状況を通知する
+        /// </summary>
+        public static async Task<MemoryImage> LoadWithProgressAsync(
+            HttpClient http,
+            HttpRequestMessage request,
+            IProgress<DownloadProgress>? progress,
+            CancellationToken cancellationToken)
+        {
+            progress?.Report(new(0, null));
+
+            // 本文の受信状況を通知するため、ヘッダーの受信完了時点で制御を戻させる
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+                .ConfigureAwait(false);
+
+            response.EnsureSuccessStatusCode();
+
+            // .NET Framework のレスポンスストリームは ReadAsync のキャンセルに対応していないため、
+            // キャンセル時はレスポンスを破棄して読み込みを中断させる
+            using var registration = cancellationToken.Register(() => response.Dispose());
+
+            using var imageStream = await response.Content.ReadAsStreamAsync()
+                .ConfigureAwait(false);
+
+            var totalBytes = response.Content.Headers.ContentLength;
+
+            try
+            {
+                return await MemoryImage.CopyFromStreamAsync(imageStream, totalBytes, progress, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex) when (cancellationToken.IsCancellationRequested && ex is not OperationCanceledException)
+            {
+                // レスポンスの破棄によって発生した例外はキャンセルとして扱う
+                throw new OperationCanceledException(cancellationToken);
             }
         }
     }
