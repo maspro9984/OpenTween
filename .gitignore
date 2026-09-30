@@ -5,6 +5,7 @@
 /.vs
 /__Instrumented
 /coverage.xml
+/OpenTween.zip
 Thumbs.db
 *.VisualState.xml
 .claude/settings.local.json
