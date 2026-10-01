@@ -147,7 +147,8 @@ namespace OpenTween.Api.GraphQL
             return new()
             {
                 IdStr = GetText(tweetElm, "rest_id"),
-                Source = GetText(tweetElm, "source"),
+                // リツイート元のツイート等で source が省略される場合がある
+                Source = GetTextOrNull(tweetElm, "source") ?? "",
                 CreatedAt = GetText(tweetLegacyElm, "created_at"),
                 FullText = fullText,
                 InReplyToScreenName = GetTextOrNull(tweetLegacyElm, "in_reply_to_screen_name"),

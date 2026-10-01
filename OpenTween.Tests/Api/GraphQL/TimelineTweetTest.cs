@@ -111,6 +111,21 @@ namespace OpenTween.Api.GraphQL
         }
 
         [Fact]
+        public void ToStatus_WithTwitterPostFactory_RetweetedTweet_MissingSource_Test()
+        {
+            // リツイート元のツイートに source が含まれていない場合
+            var rootElm = this.LoadResponseDocument("TimelineTweet_RetweetedTweet_MissingSource.json");
+            var timelineTweet = new TimelineTweet(rootElm);
+            var status = timelineTweet.ToTwitterStatus();
+            var postFactory = new TwitterPostFactory(this.CreateTabInfo(), new());
+            var post = postFactory.CreateFromStatus(status, selfUserId: new("1"), new HashSet<PersonId>(), firstLoad: false);
+
+            Assert.Equal("1617128268548964354", post.StatusId.Id);
+            Assert.Equal("1617126084138659840", post.RetweetedId!.Id);
+            Assert.Equal("", post.Source);
+        }
+
+        [Fact]
         public void ToStatus_WithTwitterPostFactory_TweetWithVisibility_Test()
         {
             var rootElm = this.LoadResponseDocument("TimelineTweet_TweetWithVisibility.json");
