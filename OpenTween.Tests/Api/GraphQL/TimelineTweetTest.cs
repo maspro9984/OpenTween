@@ -96,6 +96,22 @@ namespace OpenTween.Api.GraphQL
         }
 
         [Fact]
+        public void ToStatus_WithTwitterPostFactory_NoteTweetWithMedia_Test()
+        {
+            // 長文ツイートでは legacy のメディアの indices が note_tweet のテキストと対応しないため、本文を置換してはならない
+            var rootElm = this.LoadResponseDocument("TimelineTweet_NoteTweetWithMedia.json");
+            var timelineTweet = new TimelineTweet(rootElm);
+            var status = timelineTweet.ToTwitterStatus();
+            var postFactory = new TwitterPostFactory(this.CreateTabInfo(), new());
+            var post = postFactory.CreateFromStatus(status, selfUserId: new("1"), new HashSet<PersonId>(), firstLoad: false);
+
+            Assert.Equal("長文ツイートのテスト。この行の途中が画像のURLに置き換えられてはならない。\n\n2行目のテキスト", post.TextFromApi);
+            Assert.DoesNotContain("pic.twitter.com", post.Text);
+            Assert.Equal(2, post.Media.Count);
+            Assert.Equal("https://pbs.twimg.com/media/FmgrJiEaAAEU42G.png", post.Media[0].Url);
+        }
+
+        [Fact]
         public void ToStatus_WithTwitterPostFactory_RetweetedTweet_Test()
         {
             var rootElm = this.LoadResponseDocument("TimelineTweet_RetweetedTweet.json");

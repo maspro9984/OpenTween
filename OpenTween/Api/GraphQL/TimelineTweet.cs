@@ -184,10 +184,14 @@ namespace OpenTween.Api.GraphQL
                 },
                 ExtendedEntities = new()
                 {
+                    // メディアは legacy にのみ含まれ、indices は legacy の full_text（長文ツイートでは途中で省略されたもの）に対する位置を指す。
+                    // note_tweet のテキストにはメディアの t.co URL が含まれないため、indices を空にして本文中の置換対象から外す
                     Media = tweetLegacyElm.XPathSelectElements("extended_entities/media/item")
                         .Select(x => new TwitterEntityMedia()
                         {
-                            Indices = x.XPathSelectElements("indices/item").Select(x => int.Parse(x.Value)).ToArray(),
+                            Indices = noteTweetElm != null
+                                ? Array.Empty<int>()
+                                : x.XPathSelectElements("indices/item").Select(x => int.Parse(x.Value)).ToArray(),
                             DisplayUrl = GetText(x, "display_url"),
                             ExpandedUrl = GetText(x, "expanded_url"),
                             Url = GetText(x, "url"),
