@@ -39,6 +39,7 @@ namespace OpenTween.SocialProtocol.Twitter
                 StatusesCount = 31,
                 FriendsCount = 1,
                 FollowersCount = 302,
+                IsBlueVerified = true,
             };
             accountState.UpdateFromUser(twitterUser);
 
@@ -47,6 +48,7 @@ namespace OpenTween.SocialProtocol.Twitter
             Assert.Equal(31, accountState.StatusesCount);
             Assert.Equal(1, accountState.FriendsCount);
             Assert.Equal(302, accountState.FollowersCount);
+            Assert.True(accountState.IsBlueVerified);
         }
     }
 }

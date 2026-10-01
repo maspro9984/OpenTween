@@ -218,6 +218,7 @@ namespace OpenTween.SocialProtocol.Twitter
                     ExcludeReplyUserIds = param.ExcludeReplyUserIds.OfType<TwitterUserId>().ToArray(),
                     MediaIds = param.MediaIds.ToArray(),
                     AttachmentUrl = param.AttachmentUrl,
+                    IsNoteTweet = this.AccountState.IsBlueVerified && this.IsLongTweet(param.Text),
                 };
 
                 status = await request.Send(this.Api.Connection)
@@ -908,7 +909,37 @@ namespace OpenTween.SocialProtocol.Twitter
             return this.Configuration.DmTextCharacterLimit - textLength;
         }
 
+        /// <summary>
+        /// 有料プラン (X Premium) のアカウントで投稿可能な長文ツイートの最大文字数 (重み付き)
+        /// </summary>
+        public const int LongTweetMaxWeightedLength = 25_000;
+
+        /// <summary>
+        /// 現在のアカウントで投稿可能なツイートの最大文字数 (重み付き)
+        /// </summary>
+        public int MaxWeightedTweetLength
+            => this.AccountState.IsBlueVerified
+                ? LongTweetMaxWeightedLength
+                : this.TextConfiguration.MaxWeightedTweetLength;
+
+        /// <summary>
+        /// 通常のツイートの文字数上限を超えるため、長文ツイート (note tweet) として投稿する必要があるか否か
+        /// </summary>
+        public bool IsLongTweet(string postText)
+        {
+            var config = this.TextConfiguration;
+            return this.GetWeightedLength(postText) > config.MaxWeightedTweetLength * config.Scale;
+        }
+
         private int GetTextLengthRemainWeighted(string postText)
+        {
+            var config = this.TextConfiguration;
+            var remainWeight = this.MaxWeightedTweetLength * config.Scale - this.GetWeightedLength(postText);
+
+            return remainWeight / config.Scale;
+        }
+
+        private int GetWeightedLength(string postText)
         {
             var config = this.TextConfiguration;
             var totalWeight = 0;
@@ -955,9 +986,7 @@ namespace OpenTween.SocialProtocol.Twitter
                 index++;
             }
 
-            var remainWeight = config.MaxWeightedTweetLength * config.Scale - totalWeight;
-
-            return remainWeight / config.Scale;
+            return totalWeight;
         }
 
         public bool IsDisposed { get; private set; } = false;

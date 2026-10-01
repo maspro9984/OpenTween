@@ -43,6 +43,11 @@ namespace OpenTween.SocialProtocol.Twitter
 
         public int? StatusesCount { get; private set; }
 
+        /// <summary>
+        /// 有料プラン (X Premium) の認証済みアカウントか否か。長文ツイートの投稿可否の判定に使用する
+        /// </summary>
+        public bool IsBlueVerified { get; private set; }
+
         public ISet<PersonId> FollowerIds { get; set; } = new HashSet<PersonId>();
 
         public ISet<PersonId> BlockedUserIds { get; set; } = new HashSet<PersonId>();
@@ -87,6 +92,7 @@ namespace OpenTween.SocialProtocol.Twitter
             this.FollowersCount = self.FollowersCount;
             this.FriendsCount = self.FriendsCount;
             this.StatusesCount = self.StatusesCount;
+            this.IsBlueVerified = self.IsBlueVerified;
         }
     }
 }

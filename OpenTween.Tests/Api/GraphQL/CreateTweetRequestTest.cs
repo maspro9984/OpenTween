@@ -46,6 +46,7 @@ namespace OpenTween.Api.GraphQL
                     Assert.Contains(@"""tweet_text"":""tetete""", request.JsonString);
                     Assert.DoesNotContain(@"""reply"":", request.JsonString);
                     Assert.DoesNotContain(@"""media"":", request.JsonString);
+                    Assert.DoesNotContain(@"""richtext_options"":", request.JsonString);
                 })
                 .ReturnsAsync(apiResponse);
 
@@ -108,6 +109,36 @@ namespace OpenTween.Api.GraphQL
                 MediaIds = new TwitterMediaId[] { new("11111"), new("22222") },
             };
             await request.Send(mock.Object);
+            mock.VerifyAll();
+        }
+
+        [Fact]
+        public async Task Send_NoteTweetTest()
+        {
+            using var apiResponse = await TestUtils.CreateApiResponse("Resources/Responses/CreateNoteTweet_CircleTweet.json");
+
+            var mock = new Mock<IApiConnection>();
+            mock.Setup(x =>
+                    x.SendAsync(It.IsAny<IHttpRequest>())
+                )
+                .Callback<IHttpRequest>(x =>
+                {
+                    var request = Assert.IsType<PostJsonRequest>(x);
+                    Assert.Equal(new("https://twitter.com/i/api/graphql/iCUB42lIfXf9qPKctjE5rQ/CreateNoteTweet"), request.RequestUri);
+                    Assert.Contains(@"""richtext_options"":{""richtext_tags"":[]}", request.JsonString);
+                    Assert.Contains(@"""queryId"":""iCUB42lIfXf9qPKctjE5rQ""", request.JsonString);
+                })
+                .ReturnsAsync(apiResponse);
+
+            var request = new CreateTweetRequest
+            {
+                TweetText = "tetete",
+                IsNoteTweet = true,
+            };
+
+            var status = await request.Send(mock.Object);
+            Assert.Equal("1680534146492317696", status.IdStr);
+
             mock.VerifyAll();
         }
 

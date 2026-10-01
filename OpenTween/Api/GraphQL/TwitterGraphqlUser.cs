@@ -79,6 +79,7 @@ namespace OpenTween.Api.GraphQL
                 ScreenName = GetText(userLegacyElm, "screen_name"),
                 Protected = GetTextOrNull(userLegacyElm, "protected") == "true",
                 Verified = GetTextOrNull(userLegacyElm, "verified") == "true",
+                IsBlueVerified = GetTextOrNull(userElm, "is_blue_verified") == "true",
                 CreatedAt = GetText(userLegacyElm, "created_at"),
                 FollowersCount = int.Parse(GetText(userLegacyElm, "followers_count")),
                 FriendsCount = int.Parse(GetText(userLegacyElm, "friends_count")),

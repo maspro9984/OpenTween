@@ -36,7 +36,13 @@ namespace OpenTween.Api.GraphQL
 {
     public class CreateTweetRequest
     {
-        private static readonly Uri EndpointUri = new("https://twitter.com/i/api/graphql/tTsjMKyhajZvK4q76mpIBg/CreateTweet");
+        private const string CreateTweetQueryId = "tTsjMKyhajZvK4q76mpIBg";
+
+        private const string CreateNoteTweetQueryId = "iCUB42lIfXf9qPKctjE5rQ";
+
+        private static readonly Uri CreateTweetEndpointUri = new($"https://twitter.com/i/api/graphql/{CreateTweetQueryId}/CreateTweet");
+
+        private static readonly Uri CreateNoteTweetEndpointUri = new($"https://twitter.com/i/api/graphql/{CreateNoteTweetQueryId}/CreateNoteTweet");
 
         public required string TweetText { get; set; }
 
@@ -47,6 +53,11 @@ namespace OpenTween.Api.GraphQL
         public TwitterMediaId[] MediaIds { get; set; } = Array.Empty<TwitterMediaId>();
 
         public string? AttachmentUrl { get; set; }
+
+        /// <summary>
+        /// 長文ツイート (note tweet) として投稿するか否か (有料プランのアカウントのみ使用可能)
+        /// </summary>
+        public bool IsNoteTweet { get; set; }
 
         [DataContract]
         private record RequestBody(
@@ -69,7 +80,15 @@ namespace OpenTween.Api.GraphQL
             [property: DataMember(Name = "media", EmitDefaultValue = false)]
             VariableMedia? Media,
             [property: DataMember(Name = "attachment_url", EmitDefaultValue = false)]
-            string? AttachmentUrl
+            string? AttachmentUrl,
+            [property: DataMember(Name = "richtext_options", EmitDefaultValue = false)]
+            VariableRichtextOptions? RichtextOptions
+        );
+
+        [DataContract]
+        private record VariableRichtextOptions(
+            [property: DataMember(Name = "richtext_tags")]
+            object[] RichtextTags
         );
 
         [DataContract]
@@ -120,7 +139,10 @@ namespace OpenTween.Api.GraphQL
                             PossiblySensitive: false
                         )
                         : null,
-                    AttachmentUrl: this.AttachmentUrl
+                    AttachmentUrl: this.AttachmentUrl,
+                    RichtextOptions: this.IsNoteTweet
+                        ? new(RichtextTags: Array.Empty<object>())
+                        : null
                 ),
                 Features: new()
                 {
@@ -143,7 +165,7 @@ namespace OpenTween.Api.GraphQL
                     ["responsive_web_graphql_timeline_navigation_enabled"] = true,
                     ["responsive_web_enhance_cards_enabled"] = true,
                 },
-                QueryId: "tTsjMKyhajZvK4q76mpIBg"
+                QueryId: this.IsNoteTweet ? CreateNoteTweetQueryId : CreateTweetQueryId
             );
 #pragma warning restore SA1118
             return JsonUtils.SerializeJsonByDataContract(body);
@@ -153,7 +175,7 @@ namespace OpenTween.Api.GraphQL
         {
             var request = new PostJsonRequest
             {
-                RequestUri = EndpointUri,
+                RequestUri = this.IsNoteTweet ? CreateNoteTweetEndpointUri : CreateTweetEndpointUri,
                 JsonString = this.CreateRequestBody(),
             };
 
@@ -166,7 +188,11 @@ namespace OpenTween.Api.GraphQL
             ThrowIfDuplicateStatus(rootElm);
             ErrorResponse.ThrowIfError(rootElm);
 
-            var tweetElm = rootElm.XPathSelectElement("/data/create_tweet/tweet_results/result") ?? throw CreateParseError();
+            // 長文ツイートの場合は create_tweet ではなく notetweet_create 以下に結果が含まれる
+            var resultPath = this.IsNoteTweet
+                ? "/data/notetweet_create/tweet_results/result"
+                : "/data/create_tweet/tweet_results/result";
+            var tweetElm = rootElm.XPathSelectElement(resultPath) ?? throw CreateParseError();
 
             return TimelineTweet.ParseTweet(tweetElm);
         }

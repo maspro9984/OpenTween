@@ -115,6 +115,12 @@ namespace OpenTween.Api.DataModel
         [DataMember(Name = "verified")]
         public bool Verified { get; set; }
 
+        /// <summary>
+        /// 有料プラン (X Premium) の認証済みアカウントか否か (GraphQL API の is_blue_verified)
+        /// </summary>
+        [IgnoreDataMember]
+        public bool IsBlueVerified { get; set; }
+
         /// <exception cref="SerializationException"/>
         public static TwitterUser ParseJson(string json)
             => MyCommon.CreateDataFromJson<TwitterUser>(json);

@@ -207,6 +207,41 @@ namespace OpenTween.SocialProtocol.Twitter
         }
 
         [Fact]
+        public void GetTextLengthRemain_BlueVerifiedTest()
+        {
+            using var twitterApi = new TwitterApi();
+            using var twitter = new TwitterLegacy(twitterApi);
+
+            // 有料プランのアカウントでは長文ツイートの上限 (25,000 文字) が適用される
+            twitter.AccountState.UpdateFromUser(new() { IdStr = "514241801", ScreenName = "OpenTween", IsBlueVerified = true });
+
+            Assert.Equal(25_000, twitter.GetTextLengthRemain(""));
+            Assert.Equal(24_992, twitter.GetTextLengthRemain("hogehoge"));
+        }
+
+        [Theory]
+        [InlineData(280, false)]
+        [InlineData(281, true)]
+        public void IsLongTweet_Test(int length, bool expected)
+        {
+            using var twitterApi = new TwitterApi();
+            using var twitter = new TwitterLegacy(twitterApi);
+
+            Assert.Equal(expected, twitter.IsLongTweet(new string('a', length)));
+        }
+
+        [Fact]
+        public void IsLongTweet_WeightedTest()
+        {
+            using var twitterApi = new TwitterApi();
+            using var twitter = new TwitterLegacy(twitterApi);
+
+            // 日本語は 1 文字で 2 文字分として数えられる
+            Assert.False(twitter.IsLongTweet(new string('あ', 140)));
+            Assert.True(twitter.IsLongTweet(new string('あ', 141)));
+        }
+
+        [Fact]
         public void GetTextLengthRemain_DirectMessageTest()
         {
             using var twitterApi = new TwitterApi();
