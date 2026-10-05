@@ -33,7 +33,7 @@ namespace OpenTween
     /// </summary>
     public partial class TweenMain
     {
-        private const Keys ToggleHideFilterShortcutKeys = Keys.Control | Keys.Alt | Keys.F;
+        private const Keys ToggleHideFilterShortcutKeys = Keys.F1;
 
         private ToolStripMenuItem? hideFilterMenuItem;
         private ToolStripMenuItem? addToHideCategoryMenuItem;
@@ -139,7 +139,7 @@ namespace OpenTween
             if (!hideSettings.HiddenCategories.Contains(categoryName))
                 message += $" (このタブで隠すには、タブの右クリック → 表示フィルタで「{categoryName}」を選択してください)";
             else if (!hideSettings.Enabled)
-                message += " (このタブはフィルター表示が OFF です。Ctrl+Alt+F で ON にできます)";
+                message += " (このタブはフィルター表示が OFF です。F1 で ON にできます)";
 
             this.StatusLabel.Text = message;
         }
@@ -198,7 +198,7 @@ namespace OpenTween
 
             // フィルター表示の on/off (下の各条件・カテゴリをまとめて適用するか)
             var toggleItem = new ToolStripMenuItem("フィルター表示") { Checked = hideSettings.IsActive };
-            toggleItem.ShortcutKeyDisplayString = "Ctrl+Alt+F";
+            toggleItem.ShortcutKeyDisplayString = "F1";
             toggleItem.Click += (s, e) => this.ToggleHideFilter(tabName);
             items.Add(toggleItem);
 

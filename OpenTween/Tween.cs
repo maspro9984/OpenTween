@@ -3879,9 +3879,6 @@ namespace OpenTween
                     .FocusedOn(FocusedControl.ListTab)
                     .Do(() => SendKeys.Send("{PGUP}")),
 
-                ShortcutCommand.Create(Keys.F1)
-                    .Do(() => this.OpenApplicationWebsite()),
-
                 ShortcutCommand.Create(Keys.F3)
                     .Do(() => this.MenuItemSearchNext_Click(this.MenuItemSearchNext, EventArgs.Empty)),
 

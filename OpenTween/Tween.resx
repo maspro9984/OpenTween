@@ -751,7 +751,6 @@
 	<data name="LockListFileMenuItem.Text"><value>新着時リスト固定(&amp;L)</value></data>
 	<data name="LockListSortOrderToolStripMenuItem.Size" type="System.Drawing.Size, System.Drawing"><value>146, 22</value></data>
 	<data name="LockListSortOrderToolStripMenuItem.Text"><value>ソート順をロック</value></data>
-	<data name="MatomeMenuItem.ShortcutKeys" type="System.Windows.Forms.Keys, System.Windows.Forms"><value>F1</value></data>
 	<data name="MatomeMenuItem.Size" type="System.Drawing.Size, System.Drawing"><value>251, 22</value></data>
 	<data name="MatomeMenuItem.Text"><value>%AppName% ウェブサイト(&amp;H)</value></data>
 	<data name="MenuItemCommand.Size" type="System.Drawing.Size, System.Drawing"><value>92, 20</value></data>
