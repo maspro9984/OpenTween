@@ -1,10 +1,15 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+このファイルは、このリポジトリでコードを操作する際の Claude Code (claude.ai/code) への指針を提供します。
 
 # 実行ポリシー
 
 このプロジェクトでは自律実行モードで作業します。
+
+## 言語
+
+- プロンプトのやりとりは日本語でお願いします（途中経過・完了報告・質問も含めて全部日本語で書く）。
+
 
 ## 基本方針
 ・確認を求めずに進めてください。
