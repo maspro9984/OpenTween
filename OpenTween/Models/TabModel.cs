@@ -141,6 +141,7 @@ namespace OpenTween.Models
         /// 一覧の表示 (インデックスによるアクセスや件数) のみこちらを使用する
         /// </remarks>
         private IndexedSortedSet<PostId>? visibleIds;
+        private int visibleUnreadCount;
         private Func<PostClass, bool>? hideFilter;
         private IComparer<PostId> idComparer = Comparer<PostId>.Default;
         private ConcurrentQueue<TemporaryId> addQueue = new();
@@ -182,7 +183,11 @@ namespace OpenTween.Models
                 this.unreadIds.Add(statusId);
 
             if (this.visibleIds != null && !this.IsHidden(statusId))
+            {
                 this.visibleIds.Add(statusId);
+                if (!read)
+                    this.visibleUnreadCount++;
+            }
 
             return true;
         }
@@ -214,11 +219,13 @@ namespace OpenTween.Models
             if (this.hideFilter == null)
             {
                 this.visibleIds = null;
+                this.visibleUnreadCount = 0;
             }
             else
             {
                 var visible = this.ids.Where(x => !this.IsHidden(x));
                 this.visibleIds = new IndexedSortedSet<PostId>(visible, this.idComparer);
+                this.visibleUnreadCount = this.visibleIds.Count(x => this.unreadIds.Contains(x));
             }
 
             // 表示されなくなった発言は選択状態から外す
@@ -247,8 +254,9 @@ namespace OpenTween.Models
             if (!this.ids.Remove(statusId))
                 return false;
 
-            this.visibleIds?.Remove(statusId);
-            this.unreadIds.Remove(statusId);
+            var wasVisible = this.visibleIds?.Remove(statusId) == true;
+            if (this.unreadIds.Remove(statusId) && wasVisible)
+                this.visibleUnreadCount--;
             this.selectedStatusIds.Remove(statusId);
             return true;
         }
@@ -299,6 +307,7 @@ namespace OpenTween.Models
             this.ids.Clear();
             this.visibleIds?.Clear();
             this.unreadIds.Clear();
+            this.visibleUnreadCount = 0;
             this.selectedStatusIds.Clear();
 
             Interlocked.Exchange(ref this.addQueue, new ConcurrentQueue<TemporaryId>());
@@ -412,12 +421,9 @@ namespace OpenTween.Models
                 if (!this.UnreadManage || !SettingManager.Instance.Common.UnreadManage)
                     return 0;
 
-                // 非表示の発言は未読件数に含めない
-                var visibleIds = this.visibleIds;
-                if (visibleIds == null)
-                    return this.unreadIds.Count;
-
-                return this.unreadIds.Count(x => visibleIds.Contains(x));
+                // 選択イベントから全タブ分参照されるため、ここで未読発言を走査しない。
+                // 非表示フィルタ使用中の件数も、追加・削除・既読変更時に更新しておく。
+                return this.visibleIds == null ? this.unreadIds.Count : this.visibleUnreadCount;
             }
         }
 
@@ -444,10 +450,11 @@ namespace OpenTween.Models
             if (!this.ids.Contains(statusId))
                 throw new ArgumentOutOfRangeException(nameof(statusId));
 
-            if (read)
-                return this.unreadIds.Remove(statusId);
-            else
-                return this.unreadIds.Add(statusId);
+            var changed = read ? this.unreadIds.Remove(statusId) : this.unreadIds.Add(statusId);
+            if (changed && this.visibleIds?.Contains(statusId) == true)
+                this.visibleUnreadCount += read ? -1 : 1;
+
+            return changed;
         }
 
         public bool Contains(PostId statusId)
