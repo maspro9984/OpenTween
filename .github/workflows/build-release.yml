@@ -49,7 +49,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
           name: build-${{ github.run_number }}
+          make_latest: true
           body: |
             自動ビルド (commit ${{ github.sha }})
           files: OpenTween.zip

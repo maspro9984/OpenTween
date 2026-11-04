@@ -47,8 +47,15 @@ $includeFiles = @(
   "LICENSE.ja",
   "LICENSE.LGPL-3",
   "${assemblyName}.exe",
-  "${assemblyName}.exe.config"
+  "${assemblyName}.exe.config",
+  "*.dll"
 )
+
+# NuGet が配置するネイティブ DLL も、実行時に参照するディレクトリ構造のまま同梱する。
+# 設定・ログ・キャッシュを混入させないため、出力フォルダー全体は取り込まない。
+if (Test-Path -LiteralPath (Join-Path $BinDir 'runtimes') -PathType Container) {
+  $includeFiles += 'runtimes\'
+}
 
 . .\tools\functions.ps1
 
