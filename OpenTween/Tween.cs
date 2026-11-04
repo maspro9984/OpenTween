@@ -2954,6 +2954,7 @@ namespace OpenTween
         {
             this.SetMainWindowTitle();
             this.SetStatusLabelUrl();
+            this.UpdateHideFilterStatusLabel();
             this.SetApiStatusLabel(this.CurrentTabAccount.AccountState.RateLimits);
             if (this.ListTab.Focused || this.CurrentListView.Focused)
                 this.Tag = this.CurrentListView;

@@ -22,6 +22,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using OpenTween.Models;
@@ -37,6 +38,8 @@ namespace OpenTween
 
         private ToolStripMenuItem? hideFilterMenuItem;
         private ToolStripMenuItem? addToHideCategoryMenuItem;
+        private ToolStripStatusLabel? hideFilterStatusLabel;
+        private Font? hideFilterStatusBoldFont;
 
         private void InitializeHideFilter()
         {
@@ -59,7 +62,53 @@ namespace OpenTween
             this.ContextMenuOperate.Opening += (s, e) =>
                 this.addToHideCategoryMenuItem.Enabled = this.GetHideCategoryTargetScreenNames().Length > 0;
 
+            // ステータスバー: 現在のタブのフィルター表示の on/off (クリックで切り替え)
+            this.hideFilterStatusLabel = new ToolStripStatusLabel
+            {
+                BorderSides = ToolStripStatusLabelBorderSides.Right,
+                DisplayStyle = ToolStripItemDisplayStyle.Text,
+                AutoToolTip = false,
+            };
+            this.hideFilterStatusLabel.Click += (s, e) => this.ToggleHideFilter(this.CurrentTabName);
+
+            this.hideFilterStatusBoldFont = new Font(this.StatusStrip1.Font, FontStyle.Bold);
+            this.Disposed += (s, e) => this.hideFilterStatusBoldFont?.Dispose();
+
+            var statusIndex = this.StatusStrip1.Items.IndexOf(this.StatusLabel);
+            this.StatusStrip1.Items.Insert(statusIndex, this.hideFilterStatusLabel);
+
             this.ApplyHideFilterAllTabs();
+            this.UpdateHideFilterStatusLabel();
+        }
+
+        /// <summary>ステータスバーのフィルター表示の状態を現在のタブに合わせて更新する</summary>
+        private void UpdateHideFilterStatusLabel()
+        {
+            var label = this.hideFilterStatusLabel;
+            if (label == null)
+                return;
+
+            if (!this.statuses.Tabs.TryGetValue(this.CurrentTabName, out var tab))
+            {
+                label.Text = "フィルター: -";
+                label.ToolTipText = "";
+                label.Font = this.StatusStrip1.Font;
+                return;
+            }
+
+            var hideSettings = tab.HideSettings;
+            if (hideSettings.IsActive)
+            {
+                label.Text = "フィルター: ON";
+                label.ToolTipText = $"{this.FormatHideConditions(hideSettings)}\nクリックまたは F1 で OFF にします";
+                label.Font = this.hideFilterStatusBoldFont;
+            }
+            else
+            {
+                label.Text = "フィルター: OFF";
+                label.ToolTipText = "クリックまたは F1 で ON にします";
+                label.Font = this.StatusStrip1.Font;
+            }
         }
 
         /// <summary>選択中の発言の発言者 (リツイートの場合は元の発言者) のスクリーンネーム</summary>
@@ -362,6 +411,7 @@ namespace OpenTween
 
             this.SetMainWindowTitle();
             this.SetStatusLabelUrl();
+            this.UpdateHideFilterStatusLabel();
         }
 
         private void ApplyHideFilter(TabModel tab)
