@@ -142,6 +142,8 @@ namespace OpenTween
         /// <summary>発言履歴</summary>
         private readonly StatusTextHistory history = new();
 
+        private (Control Parent, DockStyle Dock, int Height)? postPanelLayoutBeforeMediaSelection;
+
         // 発言投稿時のAPI引数（発言編集時に設定。手書きreplyでは設定されない）
 
         /// <summary>リプライ先のステータスID・スクリーン名</summary>
@@ -8563,14 +8565,41 @@ namespace OpenTween
 
         private void ImageSelector_BeginSelecting(object sender, EventArgs e)
         {
-            this.TimelinePanel.Visible = false;
-            this.TimelinePanel.Enabled = false;
+            using (ControlTransaction.Layout(this.ToolStripContainer1.ContentPanel))
+            {
+                if (this.postPanelLayoutBeforeMediaSelection == null && this.TableLayoutPanel2.Parent is { } parent)
+                {
+                    // 投稿パネルも TimelinePanel 内にあるため、画像選択中はその外へ移す。
+                    this.postPanelLayoutBeforeMediaSelection = (parent, this.TableLayoutPanel2.Dock, this.TableLayoutPanel2.Height);
+                    this.ToolStripContainer1.ContentPanel.Controls.Add(this.TableLayoutPanel2);
+                    this.TableLayoutPanel2.Dock = DockStyle.Bottom;
+                    this.TableLayoutPanel2.Height = Math.Max(this.StatusText.PreferredHeight, 80 * this.DeviceDpi / 96);
+                    this.TableLayoutPanel2.Visible = true;
+                }
+
+                this.TimelinePanel.Visible = false;
+                this.TimelinePanel.Enabled = false;
+            }
+
+            this.StatusText.Focus();
         }
 
         private void ImageSelector_EndSelecting(object sender, EventArgs e)
         {
-            this.TimelinePanel.Visible = true;
-            this.TimelinePanel.Enabled = true;
+            using (ControlTransaction.Layout(this.ToolStripContainer1.ContentPanel))
+            {
+                if (this.postPanelLayoutBeforeMediaSelection is { } layout)
+                {
+                    layout.Parent.Controls.Add(this.TableLayoutPanel2);
+                    this.TableLayoutPanel2.Dock = layout.Dock;
+                    this.TableLayoutPanel2.Height = layout.Height;
+                    this.postPanelLayoutBeforeMediaSelection = null;
+                }
+
+                this.TimelinePanel.Visible = true;
+                this.TimelinePanel.Enabled = true;
+            }
+
             this.CurrentListView.Focus();
         }
 

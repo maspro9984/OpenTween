@@ -20,6 +20,7 @@
 // Boston, MA 02110-1301, USA.
 
 using System;
+using System.Drawing;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -69,6 +70,62 @@ namespace OpenTween
         [WinFormsFact]
         public void Initialize_Test()
             => this.UsingTweenMain((_, _) => { });
+
+        [WinFormsFact]
+        public void ImageSelection_PostControlsRemainAvailableTest()
+        {
+            this.UsingTweenMain((tweenMain, _) =>
+            {
+                // メインフォームの起動処理（通信・タイマー）を実行せず、実際のドッキング構成を表示する。
+                using var host = new Form
+                {
+                    ClientSize = new Size(800, 600),
+                    ShowInTaskbar = false,
+                    StartPosition = FormStartPosition.Manual,
+                    Location = new Point(-32000, -32000),
+                };
+                host.Controls.Add(tweenMain.ToolStripContainer1);
+
+                try
+                {
+                    host.Show();
+                    var postPanel = Assert.IsType<TableLayoutPanel>(tweenMain.StatusText.Parent);
+                    var originalParent = postPanel.Parent;
+                    var originalDock = postPanel.Dock;
+                    tweenMain.StatusText.Text = "image post draft";
+
+                    for (var i = 0; i < 2; i++)
+                    {
+                        tweenMain.ImageSelector.BeginSelection();
+                        // 追加の画像を貼り付けても復元先を上書きしない。
+                        tweenMain.ImageSelector.BeginSelection();
+
+                        Assert.True(tweenMain.ImageSelector.Visible);
+                        Assert.True(tweenMain.StatusText.Visible);
+                        Assert.True(tweenMain.StatusText.Enabled);
+                        Assert.True(tweenMain.StatusText.Focused);
+                        Assert.True(tweenMain.PostButton.Visible);
+                        Assert.True(tweenMain.PostButton.Enabled);
+                        Assert.True(tweenMain.PostButton.CanSelect);
+                        Assert.True(tweenMain.ImageSelector.Bottom <= postPanel.Top);
+                        Assert.True(postPanel.Bottom <= tweenMain.ToolStripContainer1.ContentPanel.ClientSize.Height);
+
+                        tweenMain.ImageSelector.EndSelection();
+
+                        Assert.Same(originalParent, postPanel.Parent);
+                        Assert.Equal(originalDock, postPanel.Dock);
+                        Assert.True(tweenMain.TimelinePanel.Visible);
+                        Assert.True(tweenMain.TimelinePanel.Enabled);
+                        Assert.False(tweenMain.ImageSelector.Visible);
+                        Assert.Equal("image post draft", tweenMain.StatusText.Text);
+                    }
+                }
+                finally
+                {
+                    tweenMain.Controls.Add(tweenMain.ToolStripContainer1);
+                }
+            });
+        }
 
         [WinFormsFact]
         public void AddNewTab_FilterTabTest()
