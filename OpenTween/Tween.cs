@@ -518,6 +518,8 @@ namespace OpenTween
 
         private void TweenMain_Activated(object sender, EventArgs e)
         {
+            UIHangWatchdog.Mark($"TweenMain.Activated (WindowState={this.WindowState}, Visible={this.Visible})");
+
             // 画面がアクティブになったら、発言欄の背景色戻す
             if (this.StatusText.Focused)
             {
@@ -6678,6 +6680,8 @@ namespace OpenTween
 
         private void TweenMain_Resize(object sender, EventArgs e)
         {
+            UIHangWatchdog.Mark($"TweenMain.Resize (WindowState={this.WindowState})");
+
             if (!this.initialLayout && this.settings.Common.MinimizeToTray && this.WindowState == FormWindowState.Minimized)
             {
                 this.Visible = false;
@@ -7695,7 +7699,10 @@ namespace OpenTween
         }
 
         private void TweenMain_Deactivate(object sender, EventArgs e)
-            => this.StatusText_Leave(this.StatusText, EventArgs.Empty); // 画面が非アクティブになったら、発言欄の背景色をデフォルトへ
+        {
+            UIHangWatchdog.Mark("TweenMain.Deactivate");
+            this.StatusText_Leave(this.StatusText, EventArgs.Empty); // 画面が非アクティブになったら、発言欄の背景色をデフォルトへ
+        }
 
         private void TabRenameMenuItem_Click(object sender, EventArgs e)
         {

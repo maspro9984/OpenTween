@@ -49,6 +49,10 @@ namespace OpenTween
         [STAThread]
         public static int Main(string[] args)
         {
+            // UI スレッドの応答停止時にミニダンプを書き出すための子プロセスとして起動された場合
+            if (args.Length > 0 && args[0] == UIHangWatchdog.DumpCommandArg)
+                return UIHangWatchdog.WriteDumpMain(args);
+
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
@@ -101,7 +105,14 @@ namespace OpenTween
             SetupAccounts(container.AccountCollection, settings);
             AddSecondaryAccountTabs(container.AccountCollection, container.TabInfo);
 
-            Application.Run(container.MainForm);
+            var mainForm = container.MainForm;
+
+            // UI スレッドの応答停止を監視する (/nohangwatch で無効化)
+            using var hangWatchdog = StartupOptions.ContainsKey("nohangwatch")
+                ? null
+                : new UIHangWatchdog(new(UIHangWatchdog.GetDefaultLogDirectory()));
+
+            Application.Run(mainForm);
 
             return 0;
         }
