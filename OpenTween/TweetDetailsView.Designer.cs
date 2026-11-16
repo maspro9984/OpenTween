@@ -46,7 +46,7 @@
             this.ReloadIconToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.SaveIconPictureToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.NameLinkLabel = new System.Windows.Forms.LinkLabel();
-            this.PostBrowser = new System.Windows.Forms.WebBrowser();
+            this.PostBrowser = new OpenTween.TweetDetailsWebView();
             this.ContextMenuPostBrowser = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.SelectionSearchContextMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.SearchGoogleContextMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -213,14 +213,12 @@
             // 
             resources.ApplyResources(this.PostBrowser, "PostBrowser");
             this.TableLayoutPanel1.SetColumnSpan(this.PostBrowser, 3);
-            this.PostBrowser.ContextMenuStrip = this.ContextMenuPostBrowser;
-            this.PostBrowser.IsWebBrowserContextMenuEnabled = false;
+            this.PostBrowser.BrowserContextMenu = this.ContextMenuPostBrowser;
             this.PostBrowser.Name = "PostBrowser";
             this.PostBrowser.TabStop = false;
-            this.PostBrowser.Navigated += new System.Windows.Forms.WebBrowserNavigatedEventHandler(this.PostBrowser_Navigated);
-            this.PostBrowser.Navigating += new System.Windows.Forms.WebBrowserNavigatingEventHandler(this.PostBrowser_Navigating);
+            this.PostBrowser.LinkClicked += new System.EventHandler<OpenTween.TweetDetailsLinkClickedEventArgs>(this.PostBrowser_LinkClicked);
             this.PostBrowser.StatusTextChanged += new System.EventHandler(this.PostBrowser_StatusTextChanged);
-            this.PostBrowser.PreviewKeyDown += new System.Windows.Forms.PreviewKeyDownEventHandler(this.PostBrowser_PreviewKeyDown);
+            this.PostBrowser.KeyDown += new System.Windows.Forms.KeyEventHandler(this.PostBrowser_KeyDown);
             // 
             // ContextMenuPostBrowser
             // 
@@ -463,7 +461,7 @@
 
         internal System.Windows.Forms.TableLayoutPanel TableLayoutPanel1;
         internal OTPictureBox UserPicture;
-        internal System.Windows.Forms.WebBrowser PostBrowser;
+        internal OpenTween.TweetDetailsWebView PostBrowser;
         internal System.Windows.Forms.LinkLabel SourceLinkLabel;
         internal System.Windows.Forms.ContextMenuStrip ContextMenuPostBrowser;
         internal System.Windows.Forms.ToolStripMenuItem SelectionSearchContextMenuItem;

@@ -4014,11 +4014,6 @@ namespace OpenTween
                     .FocusedOn(FocusedControl.ListTab)
                     .Do(() => this.CurrentTab.ClearAnchor(), preventDefault: false),
 
-                // PreviewKeyDownEventArgs.IsInputKey を true にしてスクロールを発生させる
-                ShortcutCommand.Create(Keys.Up, Keys.Down)
-                    .FocusedOn(FocusedControl.PostBrowser)
-                    .Do(() => { }),
-
                 ShortcutCommand.Create(Keys.Control | Keys.R)
                     .Do(() => this.MakeReplyText()),
 
@@ -6318,9 +6313,9 @@ namespace OpenTween
 
             foreach (var linkElm in linkElements)
             {
-                var displayUrl = linkElm.GetAttribute("title");
-                var href = linkElm.GetAttribute("href");
-                var linkedText = linkElm.InnerText;
+                var displayUrl = linkElm.Title;
+                var href = linkElm.Href;
+                var linkedText = linkElm.Text;
 
                 if (MyCommon.IsNullOrEmpty(displayUrl))
                     displayUrl = href;
@@ -7423,9 +7418,6 @@ namespace OpenTween
             if (File.Exists(layoutPath))
             {
                 this.ListTab.RestoreLayout(layoutPath);
-
-                // レイアウト復元で親パネルが付け替えられた PostBrowser はクリックするまで表示が更新されないため作り直す
-                this.tweetDetailsView.RecreatePostBrowser();
                 this.DispSelectedPost(forceupdate: true);
             }
 

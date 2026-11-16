@@ -102,9 +102,6 @@ namespace OpenTween
             this.NameLinkLabel.Text = "";
             this.DateTimeLabel.Text = "";
             this.SourceLinkLabel.Text = "";
-
-            new InternetSecurityManager(this.PostBrowser);
-            this.PostBrowser.AllowWebBrowserDrop = false;  // COMException を回避するため、ActiveX の初期化が終わってから設定する
         }
 
         public void Initialize(TweenMain owner, ImageCache iconCache, ThemeManager themeManager, DetailsHtmlBuilder detailsHtmlBuilder)
@@ -119,61 +116,15 @@ namespace OpenTween
             => new InvalidOperationException("Cannot call before initialization");
 
         public void ClearPostBrowser()
-            => this.PostBrowser.DocumentText = this.HtmlBuilder.Build("");
+            => this.SetPostBrowserHtml(this.HtmlBuilder.Build(""));
 
-        /// <summary>
-        /// <see cref="PostBrowser"/> を新しいインスタンスで作り直します
-        /// </summary>
-        /// <remarks>
-        /// ドッキングレイアウトの復元などで親コントロールが付け替えられると、WebBrowser (ActiveX) が
-        /// クリックされて再アクティブ化されるまで DocumentText の変更が表示されない状態になるため、
-        /// 付け替え後に呼び出して作り直す。
-        /// </remarks>
-        public void RecreatePostBrowser()
+        private void SetPostBrowserHtml(string html)
         {
-            var oldBrowser = this.PostBrowser;
-            var cellPosition = this.TableLayoutPanel1.GetCellPosition(oldBrowser);
-            var columnSpan = this.TableLayoutPanel1.GetColumnSpan(oldBrowser);
-            var rowSpan = this.TableLayoutPanel1.GetRowSpan(oldBrowser);
+            var backColor = this.Theme.ColorDetailBackcolor;
+            if (this.PostBrowser.DefaultBackgroundColor != backColor)
+                this.PostBrowser.DefaultBackgroundColor = backColor;
 
-            var newBrowser = new WebBrowser
-            {
-                AccessibleName = oldBrowser.AccessibleName,
-                ContextMenuStrip = oldBrowser.ContextMenuStrip,
-                Dock = oldBrowser.Dock,
-                IsWebBrowserContextMenuEnabled = oldBrowser.IsWebBrowserContextMenuEnabled,
-                Margin = oldBrowser.Margin,
-                MinimumSize = oldBrowser.MinimumSize,
-                Name = oldBrowser.Name,
-                TabStop = oldBrowser.TabStop,
-            };
-
-            using (ControlTransaction.Layout(this.TableLayoutPanel1))
-            {
-                oldBrowser.Navigated -= this.PostBrowser_Navigated;
-                oldBrowser.Navigating -= this.PostBrowser_Navigating;
-                oldBrowser.StatusTextChanged -= this.PostBrowser_StatusTextChanged;
-                oldBrowser.PreviewKeyDown -= this.PostBrowser_PreviewKeyDown;
-                oldBrowser.ContextMenuStrip = null;
-                this.TableLayoutPanel1.Controls.Remove(oldBrowser);
-                oldBrowser.Dispose();
-
-                this.TableLayoutPanel1.Controls.Add(newBrowser, cellPosition.Column, cellPosition.Row);
-                this.TableLayoutPanel1.SetColumnSpan(newBrowser, columnSpan);
-                this.TableLayoutPanel1.SetRowSpan(newBrowser, rowSpan);
-            }
-
-            this.PostBrowser = newBrowser;
-
-            newBrowser.Navigated += this.PostBrowser_Navigated;
-            newBrowser.Navigating += this.PostBrowser_Navigating;
-            newBrowser.StatusTextChanged += this.PostBrowser_StatusTextChanged;
-            newBrowser.PreviewKeyDown += this.PostBrowser_PreviewKeyDown;
-
-            new InternetSecurityManager(newBrowser);
-            newBrowser.AllowWebBrowserDrop = false;  // COMException を回避するため、ActiveX の初期化が終わってから設定する
-
-            this.ClearPostBrowser();
+            this.PostBrowser.NavigateToHtml(html);
         }
 
         public async Task ShowPostDetails(PostClass post)
@@ -269,19 +220,14 @@ namespace OpenTween
                 }
                 sb.Append("-----End PostClass Dump<br>");
 
-                this.PostBrowser.DocumentText = this.HtmlBuilder.Build(sb.ToString());
+                this.SetPostBrowserHtml(this.HtmlBuilder.Build(sb.ToString()));
                 return;
             }
 
             // 読み込み済みの引用ツイート・リプライ元を埋め込んで描画し、未取得のものは「読み込み中」を表示して先読みする
             var body = post.IsDeleted ? "(DELETED)" : post.Text + this.CreateQuoteTweetsHtml(post);
 
-            using (ControlTransaction.Update(this.PostBrowser))
-            {
-                this.PostBrowser.DocumentText = this.HtmlBuilder.Build(body);
-
-                this.PostBrowser.Document?.Window?.ScrollTo(0, 0);
-            }
+            this.SetPostBrowserHtml(this.HtmlBuilder.Build(body));
 
             if (!post.IsDeleted && this.HasUnloadedQuoteTweets(post))
                 loadTasks.Add(() => this.AppendQuoteTweetsAsync(post));
@@ -291,38 +237,17 @@ namespace OpenTween
 
         public void ScrollDownPostBrowser(bool forward)
         {
-            var doc = this.PostBrowser.Document;
-            if (doc == null) return;
-
-            var tags = doc.GetElementsByTagName("html");
-            if (tags.Count > 0)
-            {
-                if (forward)
-                    tags[0].ScrollTop += this.Theme.FontDetail.Height;
-                else
-                    tags[0].ScrollTop -= this.Theme.FontDetail.Height;
-            }
+            var lineHeight = this.Theme.FontDetail.Height;
+            this.PostBrowser.ScrollByPixels(forward ? lineHeight : -lineHeight);
         }
 
         public void PageDownPostBrowser(bool forward)
-        {
-            var doc = this.PostBrowser.Document;
-            if (doc == null) return;
+            => this.PostBrowser.ScrollByPage(forward, this.Theme.FontDetail.Height);
 
-            var tags = doc.GetElementsByTagName("html");
-            if (tags.Count > 0)
-            {
-                if (forward)
-                    tags[0].ScrollTop += this.PostBrowser.ClientRectangle.Height - this.Theme.FontDetail.Height;
-                else
-                    tags[0].ScrollTop -= this.PostBrowser.ClientRectangle.Height - this.Theme.FontDetail.Height;
-            }
-        }
-
-        public HtmlElement[] GetLinkElements()
+        public TweetDetailsLink[] GetLinkElements()
         {
-            return this.PostBrowser.Document.Links.Cast<HtmlElement>()
-                .Where(x => x.GetAttribute("className") != "tweet-quote-link") // 引用ツイートで追加されたリンクを除く
+            return this.PostBrowser.GetLinks()
+                .Where(x => x.ClassName != "tweet-quote-link") // 引用ツイートで追加されたリンクを除く
                 .ToArray();
         }
 
@@ -431,8 +356,7 @@ namespace OpenTween
 
             var body = post.Text + string.Concat(quoteHtmls);
 
-            using (ControlTransaction.Update(this.PostBrowser))
-                this.PostBrowser.DocumentText = this.HtmlBuilder.Build(body);
+            this.SetPostBrowserHtml(this.HtmlBuilder.Build(body));
         }
 
         private async Task<string> FetchQuoteTweetHtml(PostId statusId, bool isReply)
@@ -513,7 +437,7 @@ namespace OpenTween
                     langFrom: null,
                     langTo: SettingManager.Instance.Common.TranslateLanguage);
 
-                this.PostBrowser.DocumentText = this.HtmlBuilder.Build(translatedText);
+                this.SetPostBrowserHtml(this.HtmlBuilder.Build(translatedText));
             }
             catch (WebApiException e)
             {
@@ -528,7 +452,7 @@ namespace OpenTween
         private async Task DoSearchToolStrip(string url)
         {
             // 発言詳細で「選択文字列で検索」（選択文字列取得）
-            var selText = this.PostBrowser.GetSelectedText();
+            var selText = this.PostBrowser.SelectedText;
 
             if (selText != null)
             {
@@ -572,55 +496,19 @@ namespace OpenTween
                 await this.Owner.ShowUserStatus(screenName, showInputDialog: false);
         }
 
-        private async void PostBrowser_Navigated(object sender, WebBrowserNavigatedEventArgs e)
+        private async void PostBrowser_LinkClicked(object sender, TweetDetailsLinkClickedEventArgs e)
         {
-            if (e.Url.AbsoluteUri != "about:blank")
-            {
-                await this.ShowPostDetails(this.CurrentPost!); // 現在の発言を表示し直す (Navigated の段階ではキャンセルできない)
-                await MyCommon.OpenInBrowserAsync(this, e.Url);
-            }
+            // Ctrlを押しながらリンクを開いた場合は、設定と逆の動作をするフラグを true としておく
+            await this.Owner.OpenUriAsync(e.Uri, e.CtrlKey);
         }
 
-        private async void PostBrowser_Navigating(object sender, WebBrowserNavigatingEventArgs e)
+        private async void PostBrowser_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Url.Scheme == "data")
-            {
-                this.RaiseStatusChanged(this.PostBrowser.StatusText.Replace("&", "&&"));
-            }
-            else if (e.Url.AbsoluteUri != "about:blank")
-            {
-                e.Cancel = true;
-                // Ctrlを押しながらリンクを開いた場合は、設定と逆の動作をするフラグを true としておく
-                await this.Owner.OpenUriAsync(e.Url, MyCommon.IsKeyDown(Keys.Control));
-            }
-        }
-
-        private async void PostBrowser_PreviewKeyDown(object sender, PreviewKeyDownEventArgs e)
-        {
+            // WebView2 は Ctrl/Alt との組み合わせやファンクションキー等の入力時に KeyDown を発生させる。
+            // ブラウザ既定のショートカットキーは AreBrowserAcceleratorKeysEnabled で無効化している
             var keyRes = this.Owner.CommonKeyDown(e.KeyData, FocusedControl.PostBrowser, out var asyncTask);
             if (keyRes)
-            {
-                e.IsInputKey = true;
-            }
-            else
-            {
-                if (Enum.IsDefined(typeof(Shortcut), (Shortcut)e.KeyData))
-                {
-                    var shortcut = (Shortcut)e.KeyData;
-                    switch (shortcut)
-                    {
-                        case Shortcut.CtrlA:
-                        case Shortcut.CtrlC:
-                        case Shortcut.CtrlIns:
-                            // 既定の動作を有効にする
-                            break;
-                        default:
-                            // その他のショートカットキーは無効にする
-                            e.IsInputKey = true;
-                            break;
-                    }
-                }
-            }
+                e.Handled = true;
 
             if (asyncTask != null)
                 await asyncTask;
@@ -908,7 +796,7 @@ namespace OpenTween
                 this.ListManageUserContextToolStripMenuItem.Enabled = false;
             }
             // 文字列選択されていないときは選択文字列関係の項目を非表示に
-            var selText = this.PostBrowser.GetSelectedText();
+            var selText = this.PostBrowser.SelectedText;
             if (selText == null)
             {
                 this.SelectionSearchContextMenuItem.Enabled = false;
@@ -922,7 +810,7 @@ namespace OpenTween
                 this.SelectionTranslationToolStripMenuItem.Enabled = true;
             }
             // 発言内に自分以外のユーザーが含まれてればフォロー状態全表示を有効に
-            var ma = Regex.Matches(this.PostBrowser.DocumentText, @"href=""https?://(twitter|x).com/(#!/)?(?<ScreenName>[a-zA-Z0-9_]+)(/status(es)?/[0-9]+)?""");
+            var ma = Regex.Matches(this.PostBrowser.DocumentHtml, @"href=""https?://(twitter|x).com/(#!/)?(?<ScreenName>[a-zA-Z0-9_]+)(/status(es)?/[0-9]+)?""");
             var fAllFlag = false;
             foreach (Match mu in ma)
             {
@@ -954,7 +842,7 @@ namespace OpenTween
         private void CurrentTabToolStripMenuItem_Click(object sender, EventArgs e)
         {
             // 発言詳細の選択文字列で現在のタブを検索
-            var selText = this.PostBrowser.GetSelectedText();
+            var selText = this.PostBrowser.SelectedText;
 
             if (selText != null)
             {
@@ -979,7 +867,7 @@ namespace OpenTween
         private void SelectionCopyContextMenuItem_Click(object sender, EventArgs e)
         {
             // 発言詳細で「選択文字列をコピー」
-            var selText = this.PostBrowser.GetSelectedText();
+            var selText = this.PostBrowser.SelectedText;
             try
             {
                 Clipboard.SetDataObject(selText, false, 5, 100);
@@ -994,13 +882,13 @@ namespace OpenTween
         {
             try
             {
-                foreach (var link in this.PostBrowser.Document.Links.Cast<HtmlElement>())
+                foreach (var link in this.PostBrowser.GetLinks())
                 {
-                    if (link.GetAttribute("href") == this.postBrowserStatusText)
+                    if (link.Href == this.postBrowserStatusText)
                     {
-                        var linkStr = link.GetAttribute("title");
+                        var linkStr = link.Title;
                         if (MyCommon.IsNullOrEmpty(linkStr))
-                            linkStr = link.GetAttribute("href");
+                            linkStr = link.Href;
 
                         Clipboard.SetDataObject(linkStr, false, 5, 100);
                         return;
@@ -1016,7 +904,7 @@ namespace OpenTween
         }
 
         private void SelectionAllContextMenuItem_Click(object sender, EventArgs e)
-            => this.PostBrowser.Document.ExecCommand("SelectAll", false, null); // 発言詳細ですべて選択
+            => this.PostBrowser.SelectAll(); // 発言詳細ですべて選択
 
         private async void FollowContextMenuItem_Click(object sender, EventArgs e)
         {
@@ -1041,7 +929,7 @@ namespace OpenTween
 
         private async void FriendshipAllMenuItem_Click(object sender, EventArgs e)
         {
-            var ma = Regex.Matches(this.PostBrowser.DocumentText, @"href=""https?://(twitter|x).com/(#!/)?(?<ScreenName>[a-zA-Z0-9_]+)(/status(es)?/[0-9]+)?""");
+            var ma = Regex.Matches(this.PostBrowser.DocumentHtml, @"href=""https?://(twitter|x).com/(#!/)?(?<ScreenName>[a-zA-Z0-9_]+)(/status(es)?/[0-9]+)?""");
             var ids = new List<string>();
             foreach (Match mu in ma)
             {
@@ -1112,8 +1000,9 @@ namespace OpenTween
 
         private async void SelectionTranslationToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            var text = this.PostBrowser.GetSelectedText();
-            await this.DoTranslation(text);
+            var text = this.PostBrowser.SelectedText;
+            if (text != null)
+                await this.DoTranslation(text);
         }
 
         private async void TranslationToolStripMenuItem_Click(object sender, EventArgs e)
