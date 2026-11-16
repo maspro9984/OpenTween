@@ -25,6 +25,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Runtime.Serialization;
@@ -77,6 +78,36 @@ namespace OpenTween
 
               document.addEventListener('selectionchange', () => post({ type: 'selection', text: String(document.getSelection()) }));
 
+              // ホイール 1 ノッチで 1 行ずつスクロールする (既定では OS 設定の行数 x 約 33px 進むため本文に対して大きすぎる)
+              const wheelNotchPx = __WHEEL_NOTCH_PX__;
+              let linePitch = 0;
+              const measureLinePitch = () => {
+                if (linePitch > 0) return linePitch;
+                const probe = document.createElement('div');
+                probe.style.cssText = 'position:absolute;visibility:hidden;left:0;top:0';
+                probe.textContent = 'あ';
+                document.body.appendChild(probe);
+                const oneLine = probe.getBoundingClientRect().height;
+                probe.appendChild(document.createElement('br'));
+                probe.appendChild(document.createTextNode('あ'));
+                const twoLines = probe.getBoundingClientRect().height;
+                probe.remove();
+                linePitch = twoLines - oneLine > 0 ? twoLines - oneLine : 16;
+                return linePitch;
+              };
+              let wheelPending = 0;
+              document.addEventListener('wheel', e => {
+                if (wheelNotchPx <= 0 || !document.body || e.ctrlKey || e.deltaMode !== 0 || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+                e.preventDefault();
+                if (Math.sign(wheelPending) !== Math.sign(e.deltaY)) wheelPending = 0;
+                // タッチパッドなどの細かい入力も取りこぼさないよう、デバイスピクセル未満の端数は持ち越す
+                const ratio = window.devicePixelRatio || 1;
+                wheelPending += e.deltaY / wheelNotchPx * measureLinePitch();
+                const step = Math.trunc(wheelPending * ratio) / ratio;
+                wheelPending -= step;
+                if (step !== 0) window.scrollBy(0, step);
+              }, { passive: false });
+
               window.chrome.webview.addEventListener('message', e => {
                 const message = e.data;
                 const ratio = window.devicePixelRatio || 1;
@@ -96,6 +127,9 @@ namespace OpenTween
               });
             })();
             """;
+
+        /// <summary>Chromium がホイール 1 行分として扱うピクセル数</summary>
+        private const double ChromiumWheelPixelsPerLine = 100.0 / 3.0;
 
         private const string ContentSecurityPolicyMeta =
             """<meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'">""";
@@ -205,7 +239,7 @@ namespace OpenTween
                 coreWebView.NewWindowRequested += this.CoreWebView2_NewWindowRequested;
                 coreWebView.WebMessageReceived += this.CoreWebView2_WebMessageReceived;
 
-                await coreWebView.AddScriptToExecuteOnDocumentCreatedAsync(BridgeScript);
+                await coreWebView.AddScriptToExecuteOnDocumentCreatedAsync(CreateBridgeScript(SystemInformation.MouseWheelScrollLines));
                 if (this.IsDisposed)
                     return;
 
@@ -319,6 +353,17 @@ namespace OpenTween
                     this.SelectedText = MyCommon.IsNullOrEmpty(message.Text) ? null : message.Text;
                     break;
             }
+        }
+
+        /// <summary>
+        /// ページに埋め込むスクリプトを生成します
+        /// </summary>
+        /// <param name="wheelScrollLines">OS 設定のホイール 1 ノッチあたりのスクロール行数 (画面単位の場合は -1)</param>
+        internal static string CreateBridgeScript(int wheelScrollLines)
+        {
+            // 画面単位のスクロールが設定されている場合は既定の動作に任せる
+            var wheelNotchPx = wheelScrollLines > 0 ? wheelScrollLines * ChromiumWheelPixelsPerLine : 0.0;
+            return BridgeScript.Replace("__WHEEL_NOTCH_PX__", wheelNotchPx.ToString("R", CultureInfo.InvariantCulture));
         }
 
         /// <summary>

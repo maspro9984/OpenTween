@@ -61,6 +61,18 @@ namespace OpenTween
             Assert.Equal(expected, TweetDetailsWebView.InsertContentSecurityPolicy(html));
         }
 
+        [Theory]
+        [InlineData(3, "const wheelNotchPx = 100;")]
+        [InlineData(1, "const wheelNotchPx = 33.333333333333336;")]
+        [InlineData(-1, "const wheelNotchPx = 0;")] // 画面単位のスクロール
+        public void CreateBridgeScript_Test(int wheelScrollLines, string expected)
+        {
+            var script = TweetDetailsWebView.CreateBridgeScript(wheelScrollLines);
+
+            Assert.Contains(expected, script);
+            Assert.DoesNotContain("__WHEEL_NOTCH_PX__", script);
+        }
+
         [Fact]
         public void ParseLinks_Test()
         {
