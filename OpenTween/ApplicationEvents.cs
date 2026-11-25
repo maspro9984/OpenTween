@@ -56,6 +56,10 @@ namespace OpenTween
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
+            // DevExpress のアクセシビリティを無効にする (DevExpress のコントロールを作成する前に設定する必要がある)
+            // 外部ツールがアクセシビリティ (MSAA / UI Automation) で画面を辿ると UI スレッドが応答しなくなることがあるため
+            DevExpress.XtraEditors.WindowsFormsSettings.DisableAccessibility = DevExpress.Utils.DefaultBoolean.True;
+
             using var errorReportHandler = new ErrorReportHandler();
 
             StartupOptions = new(args);
